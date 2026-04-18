@@ -1,0 +1,5 @@
+# Python 3.8+ required
+# OBS Studio with Browser Source support required (https://obsproject.com)
+
+pyserial>=3.5
+flask>=2.0
