@@ -6,10 +6,8 @@
 #
 # Usage:
 #   1. Connect Anatec AK30 controller via USB
-#   2. Run: ls /dev/tty.* to find your port
-#   3. Update PORT below
-#   4. Run: python3 capture.py
-#   5. Operate the controller and press ENTER to label each action
+#   3. Run: python3 capture.py --port /dev/tty.usbserial-XXXX
+#   4. Operate the controller and press ENTER to label each action
 #
 # Output:
 #   - Live frame display in terminal
@@ -27,10 +25,18 @@ import tty
 import termios
 
 #####################################################################
-# Configuration — update PORT after running: ls /dev/tty.*
+# Configuration
 #####################################################################
-PORT = '/dev/tty.usbserial-1110'
-BAUD = 2400
+import argparse
+
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--port", default="/dev/tty.usbserial-1110",
+                 help="Serial port (run: ls /dev/tty.* to find yours)")
+_ap.add_argument("--baud", type=int, default=2400)
+_args = _ap.parse_args()
+
+PORT = _args.port
+BAUD = _args.baud
 
 #####################################################################
 # Session log
