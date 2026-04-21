@@ -3,11 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             background: transparent;
@@ -16,6 +12,8 @@
             height: 1080px;
             overflow: hidden;
         }
+
+        /* ── LIVE SCOREBAR ───────────────────────────────────────── */
 
         #bar {
             position: absolute;
@@ -27,18 +25,31 @@
             display: flex;
             align-items: center;
             padding: 0 32px;
-            gap: 0;
+            border-top: 2px solid #333;
+            transition: border-color 0.5s, opacity 0.6s;
         }
+
+        #bar.connected { border-top-color: #ff6b00; }
+        #bar.hidden { opacity: 0; pointer-events: none; }
 
         .team {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
             flex: 1;
         }
 
+        .team-info { display: flex; flex-direction: column; gap: 1px; }
+
+        .team-club {
+            font-size: 0.62rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
         .team-name {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: 700;
             color: #ffffff;
             text-transform: uppercase;
@@ -46,13 +57,13 @@
         }
 
         .team-fouls {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             color: #aaaaaa;
             font-weight: 500;
         }
 
         .team-fouls.bonus {
-            color: #ff6b00;
+            color: #ff0000;
             font-weight: 700;
         }
 
@@ -61,10 +72,11 @@
             text-align: right;
         }
 
+        .away .team-info { align-items: flex-end; }
+
         .scoreboard {
             display: flex;
             align-items: center;
-            gap: 0;
             padding: 0 24px;
         }
 
@@ -84,7 +96,7 @@
             padding: 0 4px;
         }
 
-        .period-wrap {
+        .center-wrap {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -92,10 +104,11 @@
             border-left: 1px solid #333;
             border-right: 1px solid #333;
             margin: 0 16px;
+            gap: 1px;
         }
 
         .period-label {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             color: #888;
             text-transform: uppercase;
             letter-spacing: 0.1em;
@@ -107,25 +120,13 @@
             color: #ff6b00;
         }
 
-        #foul-popup {
-            position: absolute;
-            bottom: 88px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(16, 24, 48, 0.95);
-            border-left: 4px solid #ff6b00;
-            padding: 10px 20px;
-            border-radius: 4px;
-            color: white;
-            font-size: 0.95rem;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            white-space: nowrap;
+        .clock-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #ffffff;
         }
 
-        #foul-popup.visible {
-            opacity: 1;
-        }
+        .clock-value.stopped { color: #888; }
 
         .pioneer-accent {
             width: 4px;
@@ -133,44 +134,288 @@
             background: #ff6b00;
             border-radius: 2px;
             margin-right: 16px;
+            flex-shrink: 0;
         }
+
+        /* ── POPUPS ──────────────────────────────────────────────── */
+
+        #timeout-popup, #foul-popup {
+            position: absolute;
+            bottom: 88px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 24px;
+            border-radius: 4px;
+            color: white;
+            font-size: 0.95rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        #timeout-popup {
+            background: rgba(16, 24, 48, 0.95);
+            border-left: 4px solid #ff0000;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        #timeout-popup.visible {
+            opacity: 1;
+            animation: flash 0.8s infinite;
+        }
+
+        #foul-popup {
+            background: rgba(16, 24, 48, 0.95);
+            border-left: 4px solid #ff6b00;
+        }
+
+        #foul-popup.visible { opacity: 1; }
+
+        @keyframes flash {
+            0%   { opacity: 1; }
+            50%  { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        /* ── FINAL STATS ─────────────────────────────────────────── */
+
+        #final {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(16, 24, 48, 0.95);
+            padding: 20px 40px 24px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s;
+        }
+
+        #final.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .final-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333;
+        }
+
+        .match-result {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .result-team { text-align: center; }
+
+        .result-club {
+            font-size: 0.62rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .result-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+
+        .result-score {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: #ff6b00;
+            padding: 0 16px;
+        }
+
+        .result-label {
+            font-size: 0.65rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            text-align: center;
+        }
+
+        .final-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: #ff6b00;
+            border: 1px solid #ff6b00;
+            padding: 3px 10px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .tables { display: flex; gap: 32px; }
+
+        .team-table { flex: 1; }
+
+        .table-header {
+            font-size: 0.68rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #222;
+        }
+
+        .table-header span { color: #ff6b00; font-weight: 700; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+
+        thead th {
+            color: #666;
+            font-weight: 500;
+            text-align: left;
+            padding: 3px 6px;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        thead th.num { text-align: right; }
+
+        tbody tr { border-top: 1px solid #1a1a2e; }
+
+        td { padding: 4px 6px; color: #cccccc; }
+
+        td.jersey { color: #888; width: 32px; font-size: 0.75rem; }
+
+        td.name { color: #ffffff; font-weight: 500; }
+
+        td.name.captain::after {
+            content: " ©";
+            color: #ff6b00;
+            font-size: 0.7rem;
+        }
+
+        td.num { text-align: right; font-variant-numeric: tabular-nums; width: 40px; }
+
+        td.points { color: #ffffff; font-weight: 700; }
+
+        td.fouls.warning { color: #ff6b00; font-weight: 600; }
     </style>
 </head>
 <body>
 
+<!-- Live scorebar -->
 <div id="bar">
     <div class="pioneer-accent"></div>
 
-    <!-- Home team -->
     <div class="team home">
-        <div class="team-name" id="home-name">—</div>
-        <div class="team-fouls" id="home-fouls">fouten: 0</div>
+        <div class="team-info">
+            <div class="team-club" id="home-club"></div>
+            <div class="team-name" id="home-name">—</div>
+            <div class="team-fouls" id="home-fouls">fouten: 0</div>
+        </div>
     </div>
 
-    <!-- Scoreboard -->
     <div class="scoreboard">
         <div class="score" id="home-score">0</div>
         <div class="divider">—</div>
-        <div class="period-wrap">
+        <div class="center-wrap">
             <div class="period-label">kwart</div>
             <div class="period-value" id="period">—</div>
+            <div class="period-label" style="margin-top:3px">tijd</div>
+            <div class="clock-value" id="clock">—</div>
         </div>
         <div class="divider">—</div>
         <div class="score" id="away-score">0</div>
     </div>
 
-    <!-- Away team -->
     <div class="team away">
-        <div class="team-name" id="away-name">—</div>
-        <div class="team-fouls" id="away-fouls">fouten: 0</div>
+        <div class="team-info">
+            <div class="team-club" id="away-club"></div>
+            <div class="team-name" id="away-name">—</div>
+            <div class="team-fouls" id="away-fouls">fouten: 0</div>
+        </div>
     </div>
 </div>
 
+<!-- Popups -->
+<div id="timeout-popup"></div>
 <div id="foul-popup"></div>
+
+<!-- Final stats -->
+<div id="final">
+    <div class="final-header">
+        <div style="display:flex; align-items:center;">
+            <div class="pioneer-accent"></div>
+            <div class="match-result">
+                <div class="result-team">
+                    <div class="result-club" id="f-home-club"></div>
+                    <div class="result-name" id="f-home-name">—</div>
+                </div>
+                <div>
+                    <div class="result-label">eindstand</div>
+                    <div class="result-score">
+                        <span id="f-home-score">0</span>
+                        <span style="color:#444; font-weight:300"> — </span>
+                        <span id="f-away-score">0</span>
+                    </div>
+                </div>
+                <div class="result-team">
+                    <div class="result-club" id="f-away-club"></div>
+                    <div class="result-name" id="f-away-name">—</div>
+                </div>
+            </div>
+        </div>
+        <div class="final-badge">Final</div>
+    </div>
+
+    <div class="tables">
+        <div class="team-table">
+            <div class="table-header">Thuis — <span id="f-home-table-name"></span></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Speler</th>
+                        <th class="num">Pts</th>
+                        <th class="num">3pt</th>
+                        <th class="num">Ftn</th>
+                    </tr>
+                </thead>
+                <tbody id="home-tbody"></tbody>
+            </table>
+        </div>
+        <div class="team-table">
+            <div class="table-header">Gasten — <span id="f-away-table-name"></span></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Speler</th>
+                        <th class="num">Pts</th>
+                        <th class="num">3pt</th>
+                        <th class="num">Ftn</th>
+                    </tr>
+                </thead>
+                <tbody id="away-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 <script>
     let lastFoul = null;
     let popupTimeout = null;
+    let timeoutTimer = null;
+    let lastHomeTimeouts = 0;
+    let lastAwayTimeouts = 0;
+    let currentState = {};
 
     function periodLabel(id) {
         const map = { 14: "1", 15: "2", 16: "3", 17: "4" };
@@ -185,29 +430,102 @@
         popupTimeout = setTimeout(() => popup.classList.remove("visible"), 4000);
     }
 
+    function startTimeoutFlash(team) {
+        const toPopup = document.getElementById("timeout-popup");
+        const name = team === "home"
+            ? (currentState.home_club || currentState.home_name || "THUIS")
+            : (currentState.away_club || currentState.away_name || "GASTEN");
+        toPopup.textContent = `TIME OUT — ${name.toUpperCase()}`;
+        toPopup.classList.add("visible");
+        clearTimeout(timeoutTimer);
+        timeoutTimer = setTimeout(() => toPopup.classList.remove("visible"), 60000);
+    }
+
+    function buildRows(players, tbodyId) {
+        const tbody = document.getElementById(tbodyId);
+        tbody.innerHTML = "";
+        players.sort((a, b) => b.points - a.points);
+        players.forEach(p => {
+            if (p.points === 0 && p.fouls === 0) return;
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="jersey">${p.jersey ?? "—"}</td>
+                <td class="name${p.captain ? " captain" : ""}">${p.name}</td>
+                <td class="num points">${p.points}</td>
+                <td class="num">${p.threes > 0 ? p.threes : "—"}</td>
+                <td class="num fouls${p.fouls >= 4 ? " warning" : ""}">${p.fouls > 0 ? p.fouls : "—"}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
     async function update() {
         try {
             const res = await fetch("/api/state");
             const s = await res.json();
+            currentState = s;
 
-            document.getElementById("home-name").textContent  = s.home_name || "—";
-            document.getElementById("away-name").textContent  = s.away_name || "—";
-            document.getElementById("home-score").textContent = s.home_score ?? 0;
-            document.getElementById("away-score").textContent = s.away_score ?? 0;
-            document.getElementById("period").textContent     = periodLabel(s.period);
+            const isFinal = s.status === "Final";
 
-            const hf = document.getElementById("home-fouls");
-            hf.textContent = `fouten: ${s.home_fouls}`;
-            hf.className = "team-fouls" + (s.home_bonus ? " bonus" : "");
+            // switch between bar and final
+            document.getElementById("bar").classList.toggle("hidden", isFinal);
+            document.getElementById("final").classList.toggle("visible", isFinal);
 
-            const af = document.getElementById("away-fouls");
-            af.textContent = `fouten: ${s.away_fouls}`;
-            af.className = "team-fouls" + (s.away_bonus ? " bonus" : "");
+            if (isFinal) {
+                // final stats
+                const playersRes = await fetch("/api/players");
+                const players = await playersRes.json();
 
-            // foul popup
-            if (s.last_foul && JSON.stringify(s.last_foul) !== JSON.stringify(lastFoul)) {
-                lastFoul = s.last_foul;
-                showFoulPopup(s.last_foul);
+                document.getElementById("f-home-name").textContent  = s.home_name || "—";
+                document.getElementById("f-away-name").textContent  = s.away_name || "—";
+                document.getElementById("f-home-club").textContent  = s.home_club || "";
+                document.getElementById("f-away-club").textContent  = s.away_club || "";
+                document.getElementById("f-home-score").textContent = s.home_score ?? 0;
+                document.getElementById("f-away-score").textContent = s.away_score ?? 0;
+                document.getElementById("f-home-table-name").textContent = s.home_name || "";
+                document.getElementById("f-away-table-name").textContent = s.away_name || "";
+
+                buildRows(players.filter(p => p.team === "home"), "home-tbody");
+                buildRows(players.filter(p => p.team === "away"), "away-tbody");
+
+            } else {
+                // live scorebar
+                document.getElementById("home-club").textContent   = s.home_club || "";
+                document.getElementById("away-club").textContent   = s.away_club || "";
+                document.getElementById("home-name").textContent   = s.home_name || "—";
+                document.getElementById("away-name").textContent   = s.away_name || "—";
+                document.getElementById("home-score").textContent  = s.home_score ?? 0;
+                document.getElementById("away-score").textContent  = s.away_score ?? 0;
+                document.getElementById("period").textContent      = periodLabel(s.period);
+
+                const clockEl = document.getElementById("clock");
+                clockEl.textContent  = s.anatec_clock ?? "—";
+                clockEl.className    = "clock-value" + (s.anatec_clock_running ? "" : " stopped");
+
+                const hf = document.getElementById("home-fouls");
+                hf.textContent = `fouten: ${s.home_fouls}`;
+                hf.className   = "team-fouls" + (s.home_bonus ? " bonus" : "");
+
+                const af = document.getElementById("away-fouls");
+                af.textContent = `fouten: ${s.away_fouls}`;
+                af.className   = "team-fouls" + (s.away_bonus ? " bonus" : "");
+
+                // timeouts
+                const ht = s.home_timeouts ?? 0;
+                const at = s.away_timeouts ?? 0;
+                if (ht > lastHomeTimeouts) startTimeoutFlash("home");
+                if (at > lastAwayTimeouts) startTimeoutFlash("away");
+                lastHomeTimeouts = ht;
+                lastAwayTimeouts = at;
+
+                // foul popup
+                if (s.last_foul && JSON.stringify(s.last_foul) !== JSON.stringify(lastFoul)) {
+                    lastFoul = s.last_foul;
+                    showFoulPopup(s.last_foul);
+                }
+
+                // connection indicator
+                document.getElementById("bar").classList.toggle("connected", s.anatec_connected);
             }
 
         } catch (e) {
