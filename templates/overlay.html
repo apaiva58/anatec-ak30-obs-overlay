@@ -315,6 +315,7 @@
     <div class="pioneer-accent"></div>
 
     <div class="team home">
+        <img id="home-logo" src="" style="height:40px; width:40px; object-fit:contain; display:none;">
         <div class="team-info">
             <div class="team-club" id="home-club"></div>
             <div class="team-name" id="home-name">—</div>
@@ -336,6 +337,7 @@
     </div>
 
     <div class="team away">
+        <img id="away-logo" src="" style="height:40px; width:40px; object-fit:contain; display:none;">
         <div class="team-info">
             <div class="team-club" id="away-club"></div>
             <div class="team-name" id="away-name">—</div>
@@ -518,6 +520,17 @@
                 lastHomeTimeouts = ht;
                 lastAwayTimeouts = at;
 
+                // logos
+                const homeLogo = document.getElementById("home-logo");
+                if (s.home_logo) {
+                    homeLogo.src = s.home_logo;
+                    homeLogo.style.display = "block";
+                }
+                const awayLogo = document.getElementById("away-logo");
+                if (s.away_logo) {
+                    awayLogo.src = s.away_logo;
+                    awayLogo.style.display = "block";
+                }
                 // foul popup
                 if (s.last_foul && JSON.stringify(s.last_foul) !== JSON.stringify(lastFoul)) {
                     lastFoul = s.last_foul;

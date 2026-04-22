@@ -161,6 +161,12 @@ def select_match(match_id):
         "home_club":  match["homeTeamOrganisationName"],
         "away_club":  match["awayTeamOrganisationName"],
         "last_foul":  None,
+        "home_logo":        match["homeTeamOrganisationUrl"],
+    "away_logo":        match["awayTeamOrganisationUrl"],
+    "match_date":       match["date"][:10],
+    "match_time":       match["startTime"][:5],
+    "match_location":   match["accommodationName"],
+    "match_court":      match["fieldName"],
     })
     return render_template("select.html", matches=matches,
                            selected=match_id, message=f"Selected: {match['homeTeamName']} vs {match['awayTeamName']}")

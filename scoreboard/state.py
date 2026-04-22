@@ -26,6 +26,12 @@ match_state = {
     "away_timeouts": 0,
     "home_club":  "",
     "away_club":  "",
+    "home_logo":        "",
+    "away_logo":        "",
+    "match_date":       "",
+    "match_time":       "",
+    "match_location":   "",
+    "match_court":      "",
     "player_stats": {},
     # Anatec serial data
     "anatec_connected":    False,
