@@ -97,7 +97,10 @@
     <div class="match-card {% if selected == match.id %}selected{% endif %}">
         <div>
             <div class="match-teams">
-                {{ match.homeTeamName }} vs {{ match.awayTeamName }}
+                {{ match.homeTeamOrganisationName }} vs {{ match.awayTeamOrganisationName }}
+            </div>
+            <div class="match-info" style="margin-top:2px">
+                {{ match.homeTeamName }} — {{ match.awayTeamName }}
             </div>
             <div class="match-info">
                 {{ match.accommodationName }} — {{ match.fieldName }}

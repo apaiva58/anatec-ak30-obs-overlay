@@ -15,10 +15,9 @@ BASE_URL = "https://api.foys.io/competition/dmf-api/v1"
 AUTH_URL = "https://api.foys.io/foys/api/v1/token"
 
 HEADERS = {
-    "demo-mode":  "true",
-    "Origin":     "https://dwf.basketball.nl",
-    "Referer":    "https://dwf.basketball.nl/",
-    "Accept":     "application/json",
+    "Origin":  "https://dwf.basketball.nl",
+    "Referer": "https://dwf.basketball.nl/",
+    "Accept":  "application/json",
 }
 
 
@@ -28,11 +27,19 @@ class FoysClient:
         self.token = None
 
     def authenticate(self):
+        demo = os.getenv("FOYS_DEMO_MODE", "false").lower() == "true"
+        if demo:
+            HEADERS["demo-mode"] = "true"
+        else:
+            HEADERS.pop("demo-mode", None)
+
+        org_id = os.getenv("FOYS_ORGANISATION_ID_DEMO") if demo else os.getenv("FOYS_ORGANISATION_ID")
+
         response = requests.post(AUTH_URL, data={
             "grant_type":     "password",
             "username":       os.getenv("FOYS_USERNAME"),
             "password":       os.getenv("FOYS_PASSWORD"),
-            "organisationId": os.getenv("FOYS_ORGANISATION_ID"),
+            "organisationId": org_id,
         }, headers=HEADERS)
         response.raise_for_status()
         self.token = response.json()["access_token"]

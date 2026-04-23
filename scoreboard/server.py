@@ -8,6 +8,7 @@ Usage:
     python scoreboard/server.py
 """
 
+import os
 import threading
 import time
 from flask import Flask, jsonify, render_template, make_response
@@ -252,7 +253,12 @@ if __name__ == "__main__":
                     default="simulate", help="Anatec reader mode")
     ap.add_argument("--port", default="/dev/tty.usbserial-1110",
                     help="Serial port for Anatec")
+    ap.add_argument("--demo", action="store_true",
+                    help="Use FOYS demo environment")
     args = ap.parse_args()
+
+    if args.demo:
+        os.environ["FOYS_DEMO_MODE"] = "true"
 
     print("Authenticating with FOYS...")
     client.authenticate()
