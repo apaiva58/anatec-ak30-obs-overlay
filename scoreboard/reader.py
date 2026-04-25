@@ -1,7 +1,7 @@
 """
 reader.py
 =========
-Reads 21-byte frames from the Anatec AK30 serial port
+Reads Anatec AK30 serial frames (23 bytes on wire; 21 data bytes) from the serial port
 and updates match_state continuously.
 
 Can run in two modes:

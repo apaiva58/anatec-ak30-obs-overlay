@@ -55,7 +55,7 @@ def make_frame(
     guest_timeouts=0,
     service_dot=False,
 ) -> bytes:
-    """Build a 21-byte Anatec frame from game state."""
+    """Build a 21-byte Anatec data frame (without CR terminator) from game state."""
 
     def a(n):
         """ASCII encode a single digit (0-9)."""

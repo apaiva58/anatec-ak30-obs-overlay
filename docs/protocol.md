@@ -28,7 +28,7 @@ Run the capture tool:
 
 ## Frame Format
 
-  Length:    21 bytes
+  Length:    23 bytes (21 data bytes + CR terminator)
   Encoding:  ASCII
   Terminator: carriage return (0x0D)
   Content:   display buffer — the frame reflects exactly what is shown

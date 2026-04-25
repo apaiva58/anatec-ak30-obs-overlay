@@ -1,7 +1,7 @@
 """
 parser.py
 =========
-Parses 21-byte Anatec AK30 serial frames into a readable dict.
+Parses Anatec AK30 serial frames (23 bytes on wire; 21 data bytes) into a readable dict.
 
 Frame format: ASCII encoded, space-separated values.
 All values transmitted as ASCII: '0'=0x30, '1'=0x31, etc.
@@ -85,7 +85,7 @@ def _number(frame: bytes, *positions) -> int:
 
 def parse(frame: bytes) -> dict | None:
     """
-    Parse a 21-byte Anatec AK30 frame.
+    Parse a 21-byte Anatec AK30 data frame (CR terminator already stripped).
     Returns a dict or None if frame is invalid.
     """
     if len(frame) != FRAME_LENGTH:

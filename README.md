@@ -155,7 +155,7 @@ Install dependencies:
 ### Anatec serial
 
 The Anatec AK30 controller continuously transmits scoreboard state over serial
-at 2400 baud. Each frame is 21 bytes, ASCII encoded. Byte positions carry
+at 2400 baud. Each frame is 23 bytes (21 data bytes + CR terminator), ASCII encoded. Byte positions carry
 score, clock, period, fouls, timeouts and service dot state.
 
 The serial protocol was reverse-engineered from the Anatec AK30-IPF controller
