@@ -1,226 +1,281 @@
 # Anatec AK30 Serial Protocol
 
-Captured: 2026-04-20, Almere Pioneers hall session  
-Hardware: Anatec AK30-IPF  
-Connection: USB-B → USB-A via /dev/tty.usbserial-1110  
-Baud rate: 2400, 8N1  
+Reverse-engineered from the Anatec AK30 controller via three capture
+sessions at Almere Pioneers Basketball, Topsportcentrum Almere.
+
+Session 1: 2026-04-20
+Session 2: 2026-04-23
+Session 3: 2026-04-25 (clock positions corrected, timeout corrected)
+
+---
+
+## Connection
+
+  Interface:  USB-B (device side)
+  Baud rate:  2400
+  Format:     8N1
+  Port:       /dev/tty.usbserial-XXXX (macOS)
+
+Find the port:
+
+    ls /dev/tty.*
+
+Run the capture tool:
+
+    python3 capture.py --port /dev/tty.usbserial-XXXX
 
 ---
 
 ## Frame Format
 
-The controller transmits a continuous stream of 21-byte frames.
+  Length:    21 bytes
+  Encoding:  ASCII
+  Terminator: carriage return (0x0D)
+  Content:   display buffer — the frame reflects exactly what is shown
+             on the physical scoreboard display
 
-All values are **ASCII encoded** — the digit `0` is transmitted as `0x30`, 
-`1` as `0x31`, etc. Spaces (`0x20`) act as separators or represent 
-empty/zero fields.
+The controller transmits continuously regardless of whether anything
+is connected to the USB port.
 
-```
-Baseline frame (all zero, clock stopped):
-30 30 20 30 20 30 30 20 30 30 30 20 20 30 30 20 20 20 30 20 30
- 0  0  _  0  _  0  0  _  0  0  0  _  _  0  0  _  _  _  0  _  0
-pos: 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20
-```
+All digit values are ASCII encoded:
+  '0' = 0x30
+  '1' = 0x31
+  ...
+  '9' = 0x39
+  ' ' = 0x20  (space — empty or zero at that position)
 
----
-
-## Byte Position Map
-
-| Pos | Field | Values |
-|-----|-------|--------|
-| 0–1 | Unknown | always `30 30` |
-| 2   | Separator | `0x20` |
-| 3   | **Home team fouls** | ASCII digit: `0x30`=0, `0x31`=1, `0x32`=2... |
-| 4   | Separator | `0x20` |
-| 5   | **Guest fouls — tens** | ASCII digit |
-| 6   | **Guest fouls — units** | ASCII digit |
-| 7   | **Timeout active flag** | `0x54`='T' home, `0x47`='G' guest, `0x20`=none |
-| 8   | **Guest timeout blink** | blinks `0x30`/`0x31` during guest timeout |
-| 9   | **Home timeout blink** | blinks `0x30`/`0x31` during home timeout |
-| 10  | **Guest score** | ASCII digit: `0x30`=0, `0x31`=1... |
-| 11  | Separator | `0x20` |
-| 12  | Separator | `0x20` |
-| 13  | **Clock seconds — tens** | ASCII digit: `0x36`=6, `0x35`=5... |
-| 14  | **Clock seconds — units** | ASCII digit: `0x35`=5, `0x34`=4... |
-| 15  | **Shot clock / service dot** | `0x07`=ON, `0x20`=OFF |
-| 16  | Separator | `0x20` |
-| 17  | Separator | `0x20` |
-| 18  | **Home score** | ASCII digit: `0x30`=0, `0x31`=1... |
-| 19  | **Clock minutes — tens** | `0x20`=0–9 min, `0x31`=10–19 min |
-| 20  | **Clock minutes — units** | ASCII digit, also signals clock running |
+CRITICAL: Read until carriage return to stay frame-aligned.
+Do not slice the byte stream into fixed 21-byte chunks without
+first finding a frame boundary. See capture.py for reference.
 
 ---
 
-## Clock Encoding
+## Byte Positions (all confirmed)
 
-The clock counts **down** from 10:00 (period start).
+### Scores
 
-- Minutes: pos 19 (tens) + pos 20 (units)
-- Seconds: pos 13 (tens) + pos 14 (units)
+  Pos  Field                 Notes
+  ---  -------------------   -----------------------------------------
+  16   Home score hundreds   space (0x20) when score < 100
+  17   Home score tens       space (0x20) when score < 10
+  18   Home score units      always present
 
-Example — clock showing 9:35:
-```
-pos 19 = 0x20 (space = tens digit 0, so 0–9 range)
-pos 20 = 0x39 ('9')
-pos 13 = 0x33 ('3')
-pos 14 = 0x35 ('5')
-→ time = 9:35
-```
+  12   Guest score hundreds  space (0x20) when score < 100
+  11   Guest score tens      space (0x20) when score < 10
+  10   Guest score units     always present
 
-Example — clock showing 1:28:
-```
-pos 19 = 0x20
-pos 20 = 0x31 ('1')
-pos 13 = 0x32 ('2')
-pos 14 = 0x38 ('8')
-→ time = 1:28
-```
+Score calculation:
 
-Clock running indicator: pos 20 = `0x31` when clock is running.  
-Clock stopped: pos 20 = `0x30`.
+  home_score  = (pos16 * 100) + (pos17 * 10) + pos18
+  guest_score = (pos12 * 100) + (pos11 * 10) + pos10
 
-**Note**: The clock running/stopped state partially overlaps with 
-the minutes units digit. Further verification needed for values 
-above 1:xx when clock is running.
+### Fouls
 
----
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  2    Home fouls tens     space (0x20) when fouls < 10
+  3    Home fouls units    always present
 
-## Period
+  4    Away fouls tens     space (0x20) when fouls < 10
+  5    Away fouls units    always present
 
-Period is encoded at **pos 6** alongside the guest fouls tens digit.
+Home and away fouls are fully independent positions.
+There is no ambiguity with the period number (resolved session 2).
 
-| pos 6 value | Meaning |
-|-------------|---------|
-| `0x30` | Period 1 (or not yet set) |
-| `0x32` | Period 2 |
-| `0x33` | Period 3 |
+### Period
 
-**Ambiguity**: pos 5+6 also encode guest team fouls. The combination 
-`pos5=0x31, pos6=0x33` appeared after "team foul guest +1" in period 3.
-This suggests the display shows a combined period+foul value 
-(e.g. `13` = 1 foul in period 3).
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  6    Period number       1=Q1, 2=Q2, 3=Q3, 4=Q4, 5=OT
 
-This needs further verification with multiple fouls across periods.
+Maximum period on Anatec AK30 is 5 (one overtime period).
+The controller does not support OT2 or beyond.
 
----
+### Clock (above 1 minute)
 
-## Team Fouls
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  19   Minutes tens        space (0x20) when minutes < 10
+  20   Minutes units
+  14   Seconds tens
+  13   Seconds units
 
-**Home fouls** — pos 3, single ASCII digit:
-- `0x30` = 0 fouls
-- `0x31` = 1 foul
-- etc.
+NOTE: pos 13 = units, pos 14 = tens. Confirmed session 3 (2026-04-25).
+Earlier documentation had these reversed — this is the correct order.
 
-**Guest fouls** — pos 5 (tens) + pos 6 (units), may encode period:
-- `0x30 0x30` = 0 fouls
-- `0x31 0x33` = observed after 1 foul in period 3
+Running detection:
+  There is no explicit clock running flag in the frame.
+  Running is detected by comparing consecutive frames — if the clock
+  value changes between frames, the clock is running.
+  At 1:xx minutes pos 20 = 0x31 which is also the digit '1' —
+  there is no way to distinguish this from the running state in a
+  single frame.
 
-Needs further capture to fully decode guest foul + period encoding.
+Examples (all stopped):
 
----
+  Clock 6:02:
+    pos 19 = 0x20 (space — minutes < 10)
+    pos 20 = 0x36 (6 — minutes units)
+    pos 14 = 0x30 (0 — seconds tens)
+    pos 13 = 0x32 (2 — seconds units)
+    result: 6:02
 
-## Timeouts
+  Clock 5:53:
+    pos 19 = 0x20 (space)
+    pos 20 = 0x35 (5)
+    pos 14 = 0x35 (5 — seconds tens)
+    pos 13 = 0x33 (3 — seconds units)
+    result: 5:53
 
-**During a timeout:**
-- pos 7 = `0x54` ('T') for home timeout, `0x47` ('G') for guest timeout
-- pos 9 blinks rapidly between `0x30`/`0x31` (home)
-- pos 8 blinks rapidly between `0x30`/`0x31` (guest)
+### Clock (below 1 minute — tenths of second mode)
 
-**Timeout count** (after timeout ends):
-- pos 9 = `0x31` after 1st home timeout used
-- pos 9 = `0x32` after 2nd home timeout used
-- pos 8 = `0x32` after guest timeout used
+When the clock drops below 1 minute the display switches to showing
+seconds and tenths of a second.
 
-**Reset timeouts**: pos 8 and pos 9 return to `0x30`
+Detection: pos 13 = 0x20 (space) signals tenths mode is active.
+NOTE: pos 13, not pos 14. Confirmed session 2 (2026-04-23) and
+verified against full sub-second capture session 3.
 
----
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  13   0x20 (space)        tenths mode active
+  14   Tenths of second    counts 9 to 0 per second
+  19   Seconds tens        space (0x20) when seconds < 10
+  20   Seconds units
 
-## Scores
+Running detection below 1 minute:
+  No explicit flag. Running is implicit — pos 14 (tenths) cycles
+  9->8->7...->0->9 and pos 20 (seconds) decrements each full cycle.
 
-**Home score** — pos 18, single ASCII digit:
-- `0x30` = 0
-- `0x31` = 1
-- etc.
+Example (clock 0:04.7):
 
-**Guest score** — pos 10, single ASCII digit.
+  pos 13 = 0x20 (space — tenths mode)
+  pos 14 = 0x37 (7 — tenths)
+  pos 19 = 0x20 (space — seconds < 10)
+  pos 20 = 0x34 (4 — seconds units)
+  result: 0:04.7
 
-**Note**: Single digit only — scores above 9 need further capture.
-For multi-digit scores, additional positions likely come into play.
+### Timeouts
 
----
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  7    Always 0x20         NO timeout flag here — original assumption
+                           was incorrect (corrected session 3)
+  8    Guest timeouts taken  count increments when timeout taken
+  9    Home timeouts taken   count increments when timeout taken
 
-## Shot Clock / Service Dot
+Timeout detection (corrected session 3, 2026-04-25):
+  The Anatec does NOT transmit a timeout active flag at pos 7.
+  Timeout is detected by combining two signals:
+  1. Service dot (pos 15 = 0x07) activates
+  2. Home or away timeout count (pos 9 or pos 8) increases
 
-- pos 15 = `0x07` when service dot is ON
-- pos 15 = `0x20` when OFF
-- Appears briefly during shot clock reset and timeout
+  Which team called the timeout is determined by which count increased.
+  When the service dot goes off (pos 15 = 0x20), the timeout has ended.
 
----
+Timeout counts per half (NBB basketball):
+  Q1+Q2 (first half):   max 2 per team
+  Q3+Q4 (second half):  max 3 per team
+  Overtime:             max 1 per team
 
-## Observed Frames
+Counts reset when the operator presses the reset button.
 
-```
-State                    Frame
-─────────────────────────────────────────────────────────
-Baseline (all zero)      30 30 20 30 20 30 30 20 30 30 30 20 20 30 30 20 20 20 30 20 30
-Home score = 1           30 30 20 30 20 30 30 20 30 30 30 20 20 30 30 20 20 20 31 20 30
-Guest score = 1          30 30 20 30 20 30 30 20 30 30 31 20 20 30 30 20 20 20 31 20 30
-Clock running 9:65       30 30 20 30 20 30 30 20 30 30 31 20 20 36 35 20 20 20 31 20 31
-Clock stopped 9:60       30 30 20 30 20 30 30 20 30 30 31 20 20 36 30 20 20 20 31 20 31
-Period 2                 30 30 20 30 20 30 32 20 30 30 31 20 20 36 30 20 20 20 31 20 31
-Period 3                 30 30 20 30 20 30 33 20 30 30 31 20 20 36 30 20 20 20 31 20 31
-Guest foul (period 3)    30 30 20 30 20 31 33 20 30 30 31 20 20 20 39 20 20 20 31 32 38
-Home foul (period 3)     30 30 20 31 20 31 33 20 30 30 31 20 20 20 39 20 20 20 31 32 38
-Home timeout active      30 30 20 31 20 31 33 20 30 31 31 20 20 30 30 07 20 20 31 20 30
-Guest timeout active     30 30 20 31 20 31 33 20 30 32 31 20 20 30 30 07 20 20 31 20 30
-Reset timeouts           30 30 20 31 20 31 33 20 30 30 31 20 20 30 30 20 20 20 31 20 30
-```
+### Service Dot
 
----
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  15   Service dot         0x07 = ON (ASCII BEL), 0x20 = OFF
 
-## Open Questions
+Activates during:
+  - Active timeout (combined with count change at pos 8/9)
+  - Clock reaching 0:00.0
+  - Shot clock reaching zero
 
-1. How are scores above 9 encoded? (pos 18/10 are single digits)
-2. Guest foul + period encoding — is it truly combined in pos 5+6?
-3. Clock running indicator vs minutes units digit — overlap at 1:xx?
-4. Personal fouls (if AK30-IPF panels connected) — which positions?
-5. Shot clock value — is it transmitted or just the on/off flag?
+0x07 is the ASCII BEL control character reused as a display indicator.
 
----
+### Unknown
 
-## Parser Implementation
-
-```python
-def parse_frame(frame: bytes) -> dict:
-    """Parse a 21-byte Anatec AK30 frame."""
-    if len(frame) != 21:
-        return None
-    
-    def digit(pos):
-        v = frame[pos]
-        return v - 0x30 if 0x30 <= v <= 0x39 else 0
-    
-    minutes = digit(20) + (digit(19) * 10 if frame[19] != 0x20 else 0)
-    seconds = digit(13) * 10 + digit(14)
-    
-    return {
-        "home_score":   digit(18),
-        "guest_score":  digit(10),
-        "home_fouls":   digit(3),
-        "guest_fouls":  digit(6),          # units only — see open questions
-        "period":       digit(6),          # ambiguous with guest fouls
-        "clock_min":    minutes,
-        "clock_sec":    seconds,
-        "clock_running": frame[20] == 0x31,
-        "timeout_active": chr(frame[7]) if frame[7] in (0x54, 0x47) else None,
-        "service_dot":  frame[15] == 0x07,
-    }
-```
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  0    Always 0x30         likely shot clock — constant 00 when
+  1    Always 0x30         no shot clock unit is connected
 
 ---
 
-## References
+## Frame Map (baseline state)
 
-- Remco van den Enden — vMixScoreboard: https://github.com/remcoenden/vMixScoreboard
-- Anatec AK30-IPF manual: https://anatec.nl/wp-content/uploads/2019/07/Handleiding_bedieningsunit_met_persoonlijke_fouten_AK30_IPF_v10.1_.0_L_.pdf
-- Capture session log: anatec_capture_20260420_180357.txt
+  pos:  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20
+  hex: 30  30  20  30  20  30  31  20  30  30  30  20  20  30  30  20  20  20  30  20  30
+  chr:  0   0   _   0   _   0   1   _   0   0   0   _   _   0   0   _   _   _   0   _   0
+
+  Meaning at baseline:
+  - Home score:  0 (pos 16+17+18 = space+space+0)
+  - Guest score: 0 (pos 12+11+10 = space+space+0)
+  - Home fouls:  0 (pos 2+3 = space+0)
+  - Away fouls:  0 (pos 4+5 = space+0)
+  - Period:      1 (pos 6 = 1)
+  - Clock:       0:00 stopped
+  - Timeout:     none (pos 7 = space, pos 8+9 = 0)
+
+---
+
+## Annotated Example Frame
+
+Home score 11, guest score 6, home fouls 1, away fouls 3, period 1,
+clock 5:53 stopped:
+
+  Hex: 303020312033312030303620203535202031312035
+
+  pos: 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20
+  hex: 30  30  20  31  20  33  31  20  30  30  36  20  20  33  35  20  20  31  31  20  35
+  chr:  0   0   _   1   _   3   1   _   0   0   6   _   _   3   5   _   _   1   1   _   5
+
+  home_score  = space + 1 + 1 = 11     (pos 16+17+18)
+  guest_score = space + space + 6 = 6  (pos 12+11+10)
+  home_fouls  = space + 1 = 1          (pos 2+3)
+  away_fouls  = space + 3 = 3          (pos 4+5)
+  period      = 1                      (pos 6)
+  minutes     = 5                      (pos 20)
+  seconds     = tens(5) + units(3) = 53  (pos 14+13)
+  clock       = 5:53 stopped
+
+---
+
+## Sub-second Transition Example
+
+Frame at 0:59.9 (transition from normal to tenths mode):
+
+  pos 13: 0x30 -> 0x20  (space — tenths mode activated)
+  pos 14: 0x30 -> 0x39  (9 — tenths start at 9)
+  pos 19: 0x20 -> 0x35  (5 — seconds tens)
+  pos 20: 0x31 -> 0x39  (9 — seconds units)
+  result: 0:59.9
+
+---
+
+## Capture Tool
+
+    python3 capture.py --port /dev/tty.usbserial-XXXX
+
+Reads frames using read_until(carriage return) for frame alignment.
+Labels frames interactively when ENTER is pressed.
+Output saved to timestamped log file.
+
+---
+
+## Notes
+
+- The frame is a display buffer — it reflects exactly what the physical
+  scoreboard shows, not an abstract data structure.
+- ASCII encoding makes frames human-readable without a decoder.
+- 0x07 (BEL) at pos 15 is reused as a display indicator — not a digit.
+- Positions 0+1 are always 0x30 — likely shot clock value, constant 00
+  when no shot clock unit is connected.
+- The AK30-IPF has personal foul panels — positions not yet documented
+  as the panels were not connected during capture sessions.
+- Maximum period is 5 (OT). Anatec does not support multiple overtime periods.
+- Scores above 199 not tested.
+- Frame alignment is critical — always read until carriage return,
+  do not slice raw byte stream into fixed chunks.
+- Running detection requires comparing consecutive frames — no single
+  frame contains an unambiguous running flag.

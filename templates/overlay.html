@@ -65,6 +65,12 @@
             font-weight: 700;
         }
 
+        .timeout-dots {
+            font-size: 0.7rem;
+            color: #888;
+            letter-spacing: 2px;
+        }
+
         .away {
             flex-direction: row-reverse;
             text-align: right;
@@ -163,6 +169,7 @@
             opacity: 1;
             animation: flash 0.8s infinite;
         }
+        
 
         #foul-popup {
             background: rgba(16, 24, 48, 0.95);
@@ -300,6 +307,7 @@
             <div class="team-club" id="home-club"></div>
             <div class="team-name" id="home-name">—</div>
             <div class="team-fouls" id="home-fouls">fouten: 0</div>
+            <div class="timeout-dots" id="home-timeout-dots">○○</div>
         </div>
     </div>
 
@@ -322,6 +330,7 @@
             <div class="team-club" id="away-club"></div>
             <div class="team-name" id="away-name">—</div>
             <div class="team-fouls" id="away-fouls">fouten: 0</div>
+            <div class="timeout-dots" id="away-timeout-dots">○○</div>
         </div>
     </div>
 </div>
@@ -401,8 +410,8 @@
         if (id >= 18) return id === 18 ? "OT" : `OT${id - 17}`;
         // Anatec raw period (1-4, 5+)
         if (id >= 1 && id <= 4) return String(id);
-        if (id >= 5) return id === 5 ? "OT" : `OT${id - 4}`;
-        return "—";
+        if (id === 5) return "OT";
+        return String(id);        return "—";
     }
     function showFoulPopup(foul) {
         const popup = document.getElementById("foul-popup");
@@ -504,16 +513,27 @@
                 af.textContent = `fouten: ${awayFouls}`;
                 af.className   = "team-fouls" + (awayBonus ? " bonus" : "");
 
+                // timeout dots — max depends on period
+                const periodNum = s.anatec_connected ? s.anatec_period :
+                    ({14:1, 15:2, 16:3, 17:4}[s.period] || s.period || 1);
+                const maxTO = periodNum <= 2 ? 2 : periodNum <= 4 ? 3 : 1;
+
+                const homeTo = s.anatec_connected ? s.anatec_home_timeouts : s.home_timeouts;
+                const awayTo = s.anatec_connected ? s.anatec_guest_timeouts : s.away_timeouts;
+                document.getElementById("home-timeout-dots").textContent =
+                    "●".repeat(Math.min(homeTo, maxTO)) + "○".repeat(Math.max(0, maxTO - homeTo));
+                document.getElementById("away-timeout-dots").textContent =
+                    "●".repeat(Math.min(awayTo, maxTO)) + "○".repeat(Math.max(0, maxTO - awayTo));
                 // TIMEOUTS — Anatec flag when connected, FOYS count as fallback
                 if (s.anatec_connected) {
-                    const toPopup = document.getElementById("timeout-popup");
-                    if (s.anatec_timeout) {
+                    if (s.anatec_timeout && s.anatec_timeout !== currentState._lastAnatecTimeout) {
                         startTimeoutFlash(s.anatec_timeout);
-                    } else {
-                        toPopup.classList.remove("visible");
-                        clearTimeout(timeoutTimer);
                     }
-                } else {
+                    // don't clear on null — let the 60-second timer handle it
+                    currentState._lastAnatecTimeout = s.anatec_timeout;
+                    
+                }
+                 else {
                     const ht = s.home_timeouts ?? 0;
                     const at = s.away_timeouts ?? 0;
                     if (ht > lastHomeTimeouts) startTimeoutFlash("home");
@@ -550,7 +570,7 @@
     }
 
     update();
-    setInterval(update, 3000);
+    setInterval(update, 1000);
 </script>
 
 </body>

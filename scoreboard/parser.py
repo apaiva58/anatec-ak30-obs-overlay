@@ -7,7 +7,7 @@ Frame format: ASCII encoded, space-separated values.
 All values transmitted as ASCII: '0'=0x30, '1'=0x31, etc.
 Spaces (0x20) represent zero or empty at that position.
 
-Byte positions (confirmed from capture sessions 2026-04-20 and 2026-04-23):
+Byte positions (confirmed from capture sessions 2026-04-20, 2026-04-23, 2026-04-25):
 
   HOME SCORE
   16      hundreds
@@ -31,33 +31,37 @@ Byte positions (confirmed from capture sessions 2026-04-20 and 2026-04-23):
   6       period number (1=Q1, 2=Q2, 3=Q3, 4=Q4)
 
   CLOCK (above 1 minute)
-  19      minutes tens
-  20      minutes units / running flag (0x31 = running)
-  13      seconds tens
-  14      seconds units
+  19      minutes tens (space when minutes < 10)
+  20      minutes units
+  14      seconds tens
+  13      seconds units
+  NOTE: pos 13=units, pos 14=tens (confirmed session 3, 2026-04-25)
 
   CLOCK (below 1 minute — tenths of second mode)
-  19      seconds tens
+  13      space (0x20) signals tenths mode
+  14      tenths of second (counts 9->0 per second)
+  19      seconds tens (space when seconds < 10)
   20      seconds units
-  13      space (0x20)
-  14      tenths of second
+  NOTE: pos 13=space is the trigger (confirmed session 2, 2026-04-23)
 
-  SERVICE DOT / SHOT CLOCK ZERO
-  15      0x07 = service dot ON, 0x20 = OFF
+  RUNNING DETECTION
+  Above 1 minute: no explicit flag. Running is detected by comparing
+  consecutive clock values. At 1 minute, pos 20 = 0x31 = both '1' and
+  potentially confused with running. Use consecutive frame comparison.
+  Below 1 minute: running is implicit from pos 14 (tenths) changing.
+
+  SERVICE DOT
+  15      0x07 = ON (ASCII BEL), 0x20 = OFF
+  Activates at 0:00.0 and during timeouts (confirmed session 3)
 
   TIMEOUT
-  7       0x54 ('T') = home timeout active
-          0x47 ('G') = guest timeout active
-          0x20 = none
-
-  HOME TIMEOUTS TAKEN
-  9       count
-
-  GUEST TIMEOUTS TAKEN
-  8       count
+  7       always 0x20 — no timeout flag here (originally assumed, now corrected)
+  8       guest timeouts taken
+  9       home timeouts taken
+  Timeout detection: service dot (pos 15 = 0x07) + timeout count increase
 
   UNKNOWN
-  0+1     always 0x30 0x30 — purpose unknown
+  0+1     always 0x30 0x30 — likely shot clock (00 when not connected)
 """
 
 FRAME_LENGTH = 21
@@ -87,40 +91,32 @@ def parse(frame: bytes) -> dict | None:
     if len(frame) != FRAME_LENGTH:
         return None
 
-    # Clock — detect sub-second mode
-    # Above 1 minute: pos 13 = seconds tens, pos 14 = seconds units
-    # Below 1 minute: pos 13 = space, pos 14 = tenths, pos 19+20 = seconds
+    # Clock mode detection
+    # Sub-second mode: pos 13 = space (0x20)
+    # Normal mode:     pos 13 = seconds units digit
     sub_second = frame[13] == 0x20
 
     if sub_second:
-        # Below 1 minute — pos 19+20 = seconds, pos 14 = tenths
+        # Below 1 minute
+        # pos 14 = tenths, pos 19 = seconds tens, pos 20 = seconds units
+        tenths  = _digit(frame, 14)
         seconds = _number(frame, 19, 20)
-        tenths = _digit(frame, 14)
         minutes = 0
-        clock_running = False  # sub-second is always near end, stopped
+        clock_running = False  # near end of period, always stopped in display
     else:
         # Above 1 minute
-        tenths = None
-        seconds = _number(frame, 13, 14)
+        # pos 14 = seconds tens, pos 13 = seconds units
+        tenths  = None
+        seconds = _number(frame, 14, 13)
 
-        # Clock running — pos 20 = 0x31 when running
-        if frame[20] == 0x31:
-            minutes = _digit(frame, 19)
-            clock_running = True
-        else:
-            min_tens = _digit(frame, 19) if frame[19] != 0x20 else 0
-            min_units = _digit(frame, 20)
-            minutes = min_tens * 10 + min_units
-            clock_running = False
-
-    # Timeout
-    timeout_flag = frame[7]
-    if timeout_flag == 0x54:
-        timeout_active = "home"
-    elif timeout_flag == 0x47:
-        timeout_active = "guest"
-    else:
-        timeout_active = None
+        # Minutes: pos 19 = tens, pos 20 = units
+        # No explicit running flag — running cannot be determined from single frame
+        # at 1:xx minutes because pos 20 = '1' is ambiguous.
+        # Reader detects running by comparing consecutive frames.
+        min_tens = _digit(frame, 19) if frame[19] != 0x20 else 0
+        min_units = _digit(frame, 20)
+        minutes = min_tens * 10 + min_units
+        clock_running = False  # set by reader via consecutive frame comparison
 
     return {
         "home_score":      _number(frame, 16, 17, 18),
@@ -133,7 +129,6 @@ def parse(frame: bytes) -> dict | None:
         "clock_tenths":    tenths,
         "clock_running":   clock_running,
         "sub_second":      sub_second,
-        "timeout_active":  timeout_active,
         "home_timeouts":   _digit(frame, 9),
         "guest_timeouts":  _digit(frame, 8),
         "service_dot":     frame[15] == 0x07,
