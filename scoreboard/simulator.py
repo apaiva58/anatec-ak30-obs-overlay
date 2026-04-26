@@ -291,7 +291,7 @@ def run():
         print(f"  Home {parsed['home_score']} — {parsed['guest_score']} Guest"
               f" | Period {parsed['period']}"
               f" | Fouls H:{parsed['home_fouls']} A:{parsed['away_fouls']}"
-              f" | TO:{parsed['timeout_active'] or 'none'}"
+              f" | TO H:{parsed['home_timeouts']} G:{parsed['guest_timeouts']}"
               f" | dot:{parsed['service_dot']}")
         print(f"  frame: {frame.hex()}")
         print()

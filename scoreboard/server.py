@@ -84,14 +84,12 @@ def poll():
                         match_state["away_fouls"] = away_fouls
                         match_state["home_bonus"] = home_fouls >= 4
                         match_state["away_bonus"] = away_fouls >= 4
-                        match_state["home_timeouts"] = len([
-                            t for t in timeouts
-                            if t["isHomeTeam"] and t["periodId"] == period
-                        ])
-                        match_state["away_timeouts"] = len([
-                            t for t in timeouts
-                            if not t["isHomeTeam"] and t["periodId"] == period
-                        ])
+                        match_state["home_timeouts"] = sum(
+                            1 for t in timeouts if t["isHomeTeam"] and t["periodId"] == period
+                        )
+                        match_state["away_timeouts"] = sum(
+                            1 for t in timeouts if not t["isHomeTeam"] and t["periodId"] == period
+                        )
 
                     new_fouls = [
                         f for f in offenses
@@ -215,30 +213,20 @@ def api_players():
         return jsonify({"error": str(e)}), 500
 
 
+_OVERLAY_TEMPLATES = {
+    None:     "overlay.html",
+    "anatec": "overlay_anatec.html",
+    "foys":   "overlay_foys.html",
+    "final":  "overlay_final.html",
+}
+
 @app.route("/overlay")
-def overlay():
-    response = make_response(render_template("overlay.html"))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    return response
-
-@app.route("/overlay/anatec")
-def overlay_anatec():
-    response = make_response(render_template("overlay_anatec.html"))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    return response
-
-@app.route("/overlay/foys")
-def overlay_foys():
-    response = make_response(render_template("overlay_foys.html"))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    return response
-
-@app.route("/overlay/final")
-def overlay_final():
-    response = make_response(render_template("overlay_final.html"))
+@app.route("/overlay/<name>")
+def overlay(name=None):
+    tmpl = _OVERLAY_TEMPLATES.get(name)
+    if tmpl is None:
+        return "Not found", 404
+    response = make_response(render_template(tmpl))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     return response

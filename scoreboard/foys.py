@@ -61,14 +61,13 @@ class FoysClient:
     def get_goals(self, match_id):
         return self._get(f"/matches/{match_id}/goals")
 
-    def get_offenses(self, match_id):
-        result = self._get(f"/matches/{match_id}/offenses")
+    def _unwrap(self, result):
         if isinstance(result, dict) and "items" in result:
             return result["items"]
         return result
 
+    def get_offenses(self, match_id):
+        return self._unwrap(self._get(f"/matches/{match_id}/offenses"))
+
     def get_timeouts(self, match_id):
-        result = self._get(f"/matches/{match_id}/timeouts")
-        if isinstance(result, dict) and "items" in result:
-            return result["items"]
-        return result
+        return self._unwrap(self._get(f"/matches/{match_id}/timeouts"))
