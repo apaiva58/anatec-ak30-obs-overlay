@@ -7,6 +7,7 @@ Session 1: 2026-04-20
 Session 2: 2026-04-23
 Session 3: 2026-04-25 (clock positions corrected, timeout corrected)
 Session 4: 2026-04-25 (possession indicator confirmed at pos 7)
+Session 5: 2026-04-26 (signal/buzzer button confirmed at pos 15)
 
 ---
 
@@ -107,6 +108,30 @@ button sequence.
 NOTE: This was originally assumed to be a timeout flag. That was incorrect.
 Timeout is NOT signaled at pos 7.
 
+### Timeouts
+
+  Pos  Field               Notes
+  ---  -----------------   -----------------------------------------
+  7    Possession indicator  NOT a timeout flag (see above)
+  8    Guest timeouts taken  count increments when timeout taken
+  9    Home timeouts taken   count increments when timeout taken
+
+Timeout detection (confirmed session 3, 2026-04-25):
+  The Anatec does NOT transmit a timeout active flag at pos 7.
+  Timeout is detected by combining two signals:
+  1. Buzzer (pos 15 = 0x07) activates
+  2. Home or away timeout count (pos 9 or pos 8) increases
+
+  Which team called the timeout is determined by which count increased.
+  When the buzzer goes off (pos 15 = 0x20), the timeout has ended.
+
+Timeout counts per half (NBB basketball):
+  Q1+Q2 (first half):   max 2 per team
+  Q3+Q4 (second half):  max 3 per team
+  Overtime:             max 1 per team
+
+Counts reset when the operator presses the reset button.
+
 ### Clock (above 1 minute)
 
   Pos  Field               Notes
@@ -169,42 +194,28 @@ Example (clock 0:04.7):
   pos 20 = 0x34 (4 — seconds units)
   result: 0:04.7
 
-### Timeouts
+### Buzzer
 
   Pos  Field               Notes
   ---  -----------------   -----------------------------------------
-  7    Possession indicator  NOT a timeout flag (see above)
-  8    Guest timeouts taken  count increments when timeout taken
-  9    Home timeouts taken   count increments when timeout taken
+  15   Buzzer              0x07 = ON (ASCII BEL drives physical buzzer)
+                           0x20 = OFF
 
-Timeout detection (confirmed session 3, 2026-04-25):
-  The Anatec does NOT transmit a timeout active flag at pos 7.
-  Timeout is detected by combining two signals:
-  1. Service dot (pos 15 = 0x07) activates
-  2. Home or away timeout count (pos 9 or pos 8) increases
+The buzzer activates for three distinct events. Distinguish them by
+checking pos 8/9 (timeout counts):
 
-  Which team called the timeout is determined by which count increased.
-  When the service dot goes off (pos 15 = 0x20), the timeout has ended.
+  Event            pos 15   pos 8/9
+  ---------------  -------  ---------------------------
+  Timeout home     0x07     pos 9 increments
+  Timeout away     0x07     pos 8 increments
+  Clock 0:00.0     0x07     unchanged
+  Signal button    0x07     unchanged
 
-Timeout counts per half (NBB basketball):
-  Q1+Q2 (first half):   max 2 per team
-  Q3+Q4 (second half):  max 3 per team
-  Overtime:             max 1 per team
+Timeout is the only event that changes pos 8/9. Clock 0:00 and signal
+button both activate pos 15 alone with no count change.
 
-Counts reset when the operator presses the reset button.
-
-### Service Dot
-
-  Pos  Field               Notes
-  ---  -----------------   -----------------------------------------
-  15   Service dot         0x07 = ON (ASCII BEL), 0x20 = OFF
-
-Activates during:
-  - Active timeout (combined with count change at pos 8/9)
-  - Clock reaching 0:00.0
-  - Shot clock reaching zero
-
-0x07 is the ASCII BEL control character reused as a display indicator.
+0x07 is the ASCII BEL control character — the same byte that historically
+drove a terminal bell. Here it drives the physical buzzer on the scoreboard.
 
 ### Unknown
 
@@ -229,6 +240,7 @@ Activates during:
   - Period:      1 (pos 6 = 1)
   - Clock:       0:00 stopped
   - Possession:  none (pos 7 = space)
+  - Buzzer:      off (pos 15 = 0x20)
 
 ---
 
@@ -282,10 +294,10 @@ Output saved to timestamped log file.
 - The frame is a display buffer — it reflects exactly what the physical
   scoreboard shows, not an abstract data structure.
 - ASCII encoding makes frames human-readable without a decoder.
-- 0x07 (BEL) at pos 15 is reused as a display indicator — not a digit.
+- 0x07 (BEL) at pos 15 drives the physical buzzer — not a digit.
 - Positions 0+1 are always 0x30 — likely shot clock value, constant 00
   when no shot clock unit is connected.
-- Pos 7 is a possession indicator, not a timeout flag.
+- Pos 7 is a possession indicator (jump ball arrow), not a timeout flag.
 - The AK30-IPF has personal foul panels — positions not yet documented
   as the panels were not connected during capture sessions.
 - Maximum period is 5 (OT). Anatec does not support multiple overtime periods.
