@@ -180,6 +180,9 @@ def api_state():
 @app.route("/api/players")
 def api_players():
     """Returns player roster with live stats for both teams."""
+    if match_state.get("_mock_players"):
+        return jsonify(match_state["_mock_players"])
+    
     if not match_state["selected"]:
         return jsonify([])
     
@@ -262,17 +265,25 @@ if __name__ == "__main__":
                     help="Serial port for Anatec")
     ap.add_argument("--demo", action="store_true",
                     help="Use FOYS demo environment")
+    ap.add_argument("--mock", action="store_true", help="Load mock data, skip FOYS auth")
+    ap.add_argument("--finalised", action="store_true", help="Set mock status to Final")
     args = ap.parse_args()
 
-    if args.demo:
-        os.environ["FOYS_DEMO_MODE"] = "true"
-
-    print("Authenticating with FOYS...")
-    client.authenticate()
-
-    print("Starting FOYS background poller...")
-    t = threading.Thread(target=poll, daemon=True)
-    t.start()
+    if args.mock:
+        import json
+        with open("mock_data.json") as f:
+            mock = json.load(f)
+        match_state.update(mock["match"])
+        match_state.update(mock["anatec"])
+        match_state["status"] = "Final" if args.finalised else "InProgress"
+        match_state["_mock_players"] = mock["players"]
+        print("Running in MOCK mode" + (" — finalised" if args.finalised else " — InProgress"))
+    else:
+        print("Authenticating with FOYS...")
+        client.authenticate()
+        print("Starting FOYS background poller...")
+        t = threading.Thread(target=poll, daemon=True)
+        t.start()
 
     if args.anatec != "off":
         print(f"Starting Anatec reader in {args.anatec} mode...")

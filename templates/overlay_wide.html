@@ -255,15 +255,16 @@
             100% { opacity: 1; }
         }
 
-        /* ── FINAL STATS ── */
+/* ── FINAL STATS ── */
 
         #final {
             position: absolute;
+            top: 0;
             bottom: 0;
             left: 0;
             right: 0;
             background: rgba(8, 12, 28, 0.96);
-            padding: 24px 48px 28px;
+            padding: 48px 80px 56px;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.6s;
@@ -278,9 +279,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 14px;
-            border-bottom: 1px solid #222;
+            margin-bottom: 32px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
         }
 
         .match-result {
@@ -292,15 +293,15 @@
         .result-team { text-align: center; }
 
         .result-club {
-            font-size: 0.65rem;
-            color: #666;
+            font-size: 1.2rem;
+            color: #aaaaaa;
             text-transform: uppercase;
             letter-spacing: 0.1em;
         }
 
         .result-name {
             font-family: 'Barlow Condensed', sans-serif;
-            font-size: 1.4rem;
+            font-size: 2.8rem;
             font-weight: 800;
             color: #ffffff;
             text-transform: uppercase;
@@ -308,16 +309,16 @@
 
         .result-score {
             font-family: 'Barlow Condensed', sans-serif;
-            font-size: 3.6rem;
+            font-size: 6rem;
             font-weight: 900;
             color: #ff6b00;
-            padding: 0 20px;
+            padding: 0 24px;
             letter-spacing: -0.02em;
         }
 
         .result-label {
-            font-size: 0.65rem;
-            color: #555;
+            font-size: 1rem;
+            color: #aaaaaa;
             text-transform: uppercase;
             letter-spacing: 0.15em;
             text-align: center;
@@ -325,53 +326,55 @@
 
         .final-badge {
             font-family: 'Barlow Condensed', sans-serif;
-            font-size: 0.75rem;
+            font-size: 1.2rem;
             font-weight: 700;
             letter-spacing: 0.2em;
             color: #ff6b00;
             border: 1px solid #ff6b00;
-            padding: 4px 14px;
+            padding: 8px 24px;
             border-radius: 3px;
             text-transform: uppercase;
         }
 
-        .tables { display: flex; gap: 40px; }
+        .tables { display: flex; gap: 60px; }
         .team-table { flex: 1; }
 
         .table-header {
-            font-size: 0.7rem;
-            color: #666;
+            font-size: 1.3rem;
+            color: #aaaaaa;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #1a1a2e;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #333;
         }
 
         .table-header span { color: #ff6b00; font-weight: 700; }
 
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 1.05rem; }
 
         thead th {
-            color: #555;
-            font-weight: 500;
+            color: #aaaaaa;
+            font-weight: 600;
+            font-size: 1.1rem;
             text-align: left;
-            padding: 4px 8px;
-            font-size: 0.7rem;
+            padding: 5px 8px;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
 
         thead th.num { text-align: right; }
-        tbody tr { border-top: 1px solid #111; }
-        td { padding: 5px 8px; color: #ccc; }
-        td.jersey { color: #666; width: 36px; font-size: 0.8rem; }
-        td.name { color: #fff; font-weight: 500; }
-        td.name.captain::after { content: " ©"; color: #ff6b00; font-size: 0.75rem; }
-        td.num { text-align: right; font-variant-numeric: tabular-nums; width: 44px; }
-        td.points { color: #fff; font-weight: 700; }
+        tbody tr { border-top: 1px solid #1a1a2e; }
+        td { padding: 10px 12px; color: #ffffff; }
+        td.jersey { color: #aaaaaa; width: 56px; font-size: 1.1rem; }
+        td.name { color: #ffffff; font-weight: 500; }
+        td.name.captain::after { content: " ©"; color: #ff6b00; font-size: 0.8rem; }
+        td.num { text-align: right; font-variant-numeric: tabular-nums; width: 50px; }
+        td.points { color: #ffffff; font-weight: 700; }
         td.fouls.warning { color: #ff6b00; font-weight: 600; }
     </style>
+        
 </head>
 <body>
 
