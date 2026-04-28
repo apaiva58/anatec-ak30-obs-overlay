@@ -42,26 +42,39 @@ def obs_watcher():
     - Clock running again in new period           → switch back to Scène 2: WIDE Overlay
     - End of period 4 or overtime (5)             → no automatic switch
     """
-    last_period   = None
-    showing_stats = False
+    last_period    = None
+    showing_stats  = False
+    tracked_period = None   # ← was missing
+    max_clock_seen = 0
 
     while True:
         try:
-            minutes = match_state.get("anatec_clock_min", 1)
-            seconds = match_state.get("anatec_clock_sec", 1)
-            period  = match_state.get("anatec_period")
-            running = match_state.get("anatec_clock_running", False)
+            minutes    = match_state.get("anatec_clock_min", 0)
+            seconds    = match_state.get("anatec_clock_sec", 0)
+            period     = match_state.get("anatec_period")
+            total_secs = minutes * 60 + seconds
+
+            # Reset when period changes
+            if period != tracked_period:
+                tracked_period = period
+                max_clock_seen = 0
+
+            # Track highest clock value seen in this period
+            if period in [1, 2, 3, 4]:
+                max_clock_seen = max(max_clock_seen, total_secs)
 
             # End of period 1, 2 or 3 → switch to STATS
-            if (minutes == 0 and seconds == 0
+            if (total_secs == 0
+                    and max_clock_seen > 0
                     and period != last_period
                     and period in [1, 2, 3]):
-                last_period   = period
-                showing_stats = True
+                last_period    = period
+                showing_stats  = True
+                max_clock_seen = 0
                 obs_switch_scene("Scène 4: STATS")
 
-            # Clock running again in new period → switch back to WIDE
-            elif showing_stats and running and seconds > 0:
+            # Clock moved off 0:00 → switch back to WIDE
+            elif showing_stats and total_secs > 0:
                 showing_stats = False
                 obs_switch_scene("Scène 2: WIDE Overlay")
 
@@ -69,8 +82,7 @@ def obs_watcher():
             print(f"[OBS watcher] {e}")
 
         time.sleep(1)
-
-
+        
 # ── Helper functions ────────────────────────────────────────────────────────
 
 def calculate_score(goals, team_id):
@@ -346,6 +358,9 @@ if __name__ == "__main__":
         match_state["_mock_players"] = mock["players"]
         print("Running in MOCK mode" + (" — finalised" if args.finalised else " — InProgress"))
     else:
+        if args.demo:                                 # ← add
+            os.environ["FOYS_DEMO_MODE"] = "true"    # ← add
+            print("Using FOYS demo environment") 
         print("Authenticating with FOYS...")
         client.authenticate()
         print("Starting FOYS background poller...")
