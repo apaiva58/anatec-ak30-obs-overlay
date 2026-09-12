@@ -25,7 +25,7 @@ def obs_switch_scene(scene_name):
     """Switch OBS scene via WebSocket. Fails silently if OBS not connected."""
     try:
         import obsws_python as obs
-        cl = obs.ReqClient(host="localhost", port=4455, password="Alvaro09", timeout=3)
+        cl = obs.ReqClient(host="localhost", port=4455, password=os.getenv("OBS_WEBSOCKET_PASSWORD"), timeout=3)
         cl.set_current_program_scene(scene_name)
         cl.disconnect()
         print(f"[OBS] Switched to: {scene_name}")
