@@ -283,6 +283,11 @@ def system_status():
         foys = "off"
     elif not match_state.get("foys_auth_ok"):
         foys = "red"
+    elif not match_state.get("selected"):
+        # Nothing polls FOYS before a match is chosen — poll() short-circuits
+        # on `selected`. Freshness would only measure how long ago a page was
+        # loaded, so report the login instead of a meaningless timestamp.
+        foys = "idle"
     elif foys_age is None:
         foys = "amber"
     elif foys_age < 15:
@@ -304,6 +309,15 @@ def system_status():
         "match_status": match_state.get("status"),
         "selected":     match_state.get("selected"),
     }
+
+
+@app.route("/status")
+def status_page():
+    """Standalone status card — add as an OBS Custom Browser Dock."""
+    response = make_response(render_template("status.html"))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.route("/api/state")

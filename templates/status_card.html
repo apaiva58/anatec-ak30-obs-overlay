@@ -1,0 +1,193 @@
+<!--
+status_card.html
+================
+Live system status, polled from /api/state every 2 seconds.
+
+Included by select.html (pre-flight check) and rendered standalone at
+/status for use as an OBS Custom Browser Dock (Docks > Custom Browser Docks).
+
+No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
+-->
+<style>
+    .status-card {
+        background: #16213e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        font-size: 0.85rem;
+    }
+    .status-row {
+        display: flex;
+        align-items: center;
+        padding: 4px 0;
+    }
+    .status-row .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #666;
+        margin-right: 10px;
+        flex-shrink: 0;
+    }
+    .dot.green { background: #6fcf6f; }
+    .dot.amber { background: #ff9500; }
+    .dot.red   { background: #ff5252; }
+    .dot.idle  { background: #4a8f5a; }
+    .dot.off   { background: #555; }
+    .status-row .lbl {
+        color: #888;
+        width: 90px;
+        flex-shrink: 0;
+    }
+    .status-row .val {
+        color: #ddd;
+        font-weight: 600;
+    }
+    .status-row .age {
+        color: #666;
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.78rem;
+    }
+    .status-hint {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #2a2a40;
+        color: #ff9500;
+        font-size: 0.8rem;
+        line-height: 1.35;
+    }
+    .status-hint:empty { display: none; }
+</style>
+
+<div class="status-card">
+    <div class="status-row">
+        <span class="dot" id="dot-modus"></span>
+        <span class="lbl">Modus</span>
+        <span class="val" id="val-modus">—</span>
+    </div>
+    <div class="status-row">
+        <span class="dot" id="dot-anatec"></span>
+        <span class="lbl">Anatec</span>
+        <span class="val" id="val-anatec">—</span>
+        <span class="age" id="age-anatec"></span>
+    </div>
+    <div class="status-row">
+        <span class="dot" id="dot-foys"></span>
+        <span class="lbl">FOYS</span>
+        <span class="val" id="val-foys">—</span>
+        <span class="age" id="age-foys"></span>
+    </div>
+    <div class="status-row">
+        <span class="dot" id="dot-match"></span>
+        <span class="lbl">Wedstrijd</span>
+        <span class="val" id="val-match">—</span>
+    </div>
+    <div class="status-hint" id="status-hint"></div>
+</div>
+
+<script>
+(function () {
+    var MODUS_LABEL = {
+        serial:   "Live",
+        simulate: "Simulatie",
+        mock:     "Mock",
+        off:      "Anatec uit"
+    };
+    var FEED_LABEL = {
+        green: "Verbonden",
+        amber: "Vertraagd",
+        red:   "Geen data",
+        idle:  "Ingelogd",
+        off:   "Uit"
+    };
+
+    function setDot(id, colour) {
+        var el = document.getElementById(id);
+        if (el) { el.className = "dot " + colour; }
+    }
+
+    function setText(id, text) {
+        var el = document.getElementById(id);
+        if (el) { el.textContent = text; }
+    }
+
+    function ageText(seconds) {
+        if (seconds === null || seconds === undefined) { return ""; }
+        if (seconds < 60) { return Math.round(seconds) + "s"; }
+        return Math.round(seconds / 60) + "m";
+    }
+
+    function hintFor(sys) {
+        // One line, most actionable first.
+        if (sys.anatec === "red" && sys.anatec_mode === "serial") {
+            return "Anatec: geen data. Controleer de USB-kabel en of het bedieningspaneel aanstaat.";
+        }
+        if (sys.foys === "red") {
+            return "Geen verbinding met FOYS. Anatec-scores blijven werken; FOYS-gegevens worden niet bijgewerkt.";
+        }
+        if (sys.anatec_mode === "simulate") {
+            return "Let op: simulatiemodus — de scores zijn niet echt.";
+        }
+        if (sys.foys_mode === "mock") {
+            return "Let op: mockmodus — de gegevens zijn niet echt.";
+        }
+        if (sys.foys_mode === "demo") {
+            return "Let op: FOYS-demoomgeving.";
+        }
+        if (!sys.selected) {
+            return "Nog geen wedstrijd geselecteerd.";
+        }
+        return "";
+    }
+
+    function update() {
+        fetch("/api/state", { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+                var sys = s.system || {};
+
+                var mode = sys.anatec_mode || "off";
+                var modeIsLive = (mode === "serial" && sys.foys_mode === "live");
+                setDot("dot-modus", modeIsLive ? "green" : "amber");
+                setText("val-modus", MODUS_LABEL[mode] || mode);
+
+                setDot("dot-anatec", sys.anatec || "off");
+                setText("val-anatec", FEED_LABEL[sys.anatec] || "—");
+                setText("age-anatec", ageText(sys.anatec_age));
+
+                setDot("dot-foys", sys.foys || "off");
+                setText("val-foys", FEED_LABEL[sys.foys] || "—");
+                // Idle means nothing is polling FOYS yet, so an age would only
+                // show how long ago a page was loaded. Leave it blank.
+                setText("age-foys", sys.foys === "idle" ? "" : ageText(sys.foys_age));
+
+                if (sys.selected) {
+                    setDot("dot-match", sys.match_status === "InProgress" ? "green" : "amber");
+                    // DWF returns bare team names (e.g. "M12-1"), so both sides
+                    // often read the same. The federation match id disambiguates
+                    // and is the key to cross-reference in DWF.
+                    var teams = (s.home_name || "?") + " — " + (s.away_name || "?");
+                    setText("val-match", s.match_id ? teams + " · #" + s.match_id : teams);
+                } else {
+                    setDot("dot-match", "off");
+                    setText("val-match", "Geen selectie");
+                }
+
+                setText("status-hint", hintFor(sys));
+            })
+            .catch(function () {
+                // Server unreachable — everything unknown, say so plainly.
+                ["modus", "anatec", "foys", "match"].forEach(function (k) {
+                    setDot("dot-" + k, "red");
+                    setText("val-" + k, "—");
+                });
+                setText("status-hint", "Geen verbinding met de server.");
+            });
+    }
+
+    update();
+    setInterval(update, 2000);
+})();
+</script>

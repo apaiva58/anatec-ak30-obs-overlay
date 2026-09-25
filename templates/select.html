@@ -98,6 +98,8 @@
     <h1>Almere Pioneers</h1>
     <p class="subtitle">Selecteer de wedstrijd voor de live overlay</p>
 
+    {% include "status_card.html" %}
+
     {% if foys_error %}
     <div class="error">{{ foys_error }}</div>
     {% endif %}
@@ -131,7 +133,8 @@
 
     {% if selected %}
     <p class="overlay-link">
-        OBS Browser Source: <a href="/overlay">http://localhost:5001/overlay</a>
+        OBS Browser Source: <a href="/overlay">http://localhost:5001/overlay</a><br>
+        OBS Dock (Docks &rsaquo; Custom Browser Docks): <a href="/status">http://localhost:5001/status</a>
     </p>
     {% endif %}
 </body>
