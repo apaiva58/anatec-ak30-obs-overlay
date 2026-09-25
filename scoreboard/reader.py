@@ -66,6 +66,7 @@ def _update_state(parsed: dict):
     match_state["anatec_clock_running"] = clock_running
     match_state["anatec_service_dot"]   = parsed["service_dot"]
     match_state["anatec_connected"]     = True
+    match_state["anatec_last_frame_ts"] = time.time()
 
     # timeout active — service dot on + count increased
     if parsed["service_dot"]:
@@ -142,9 +143,13 @@ def start_reader(mode: str = "simulate", port: str = None, baud: int = 2400):
     mode: "serial" or "simulate"
     port: serial port path (required for serial mode)
     """
+    match_state["anatec_mode"] = mode
+    match_state["anatec_port"] = port if mode == "serial" else None
+
     if mode == "serial":
         if not port:
             print("Serial mode requires a port argument.")
+            match_state["anatec_mode"] = "off"
             return
         t = threading.Thread(target=_read_serial, args=(port, baud), daemon=True)
     else:

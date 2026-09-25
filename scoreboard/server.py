@@ -127,8 +127,10 @@ def poll():
                         current = next((m for m in matches if m["id"] == match_id), None)
                         if current:
                             match_state["status"] = current["status"]
+                        match_state["foys_last_ok_ts"]  = time.time()
+                        match_state["foys_error_count"] = 0
                     except Exception:
-                        pass
+                        match_state["foys_error_count"] = match_state.get("foys_error_count", 0) + 1
 
                 # only when not Final
                 if match_state["status"] != "Final":
@@ -136,6 +138,8 @@ def poll():
                     offenses = client.get_offenses(match_id)
                     timeouts = client.get_timeouts(match_id)
                     period   = current_period(goals, offenses)
+                    match_state["foys_last_ok_ts"]  = time.time()
+                    match_state["foys_error_count"] = 0
 
                     match_state["home_score"] = calculate_score(goals, home_id)
                     match_state["away_score"] = calculate_score(goals, away_id)
@@ -189,6 +193,7 @@ def poll():
                     match_state["player_stats"] = player_stats
 
         except Exception as e:
+            match_state["foys_error_count"] = match_state.get("foys_error_count", 0) + 1
             print(f"Poll error: {e}")
 
         tick += 1
@@ -200,8 +205,12 @@ def poll():
 def safe_get_matches():
     """Fetch matches from FOYS. Returns (matches, error_message)."""
     try:
-        return client.get_matches(), None
+        matches = client.get_matches()
+        match_state["foys_last_ok_ts"]  = time.time()
+        match_state["foys_error_count"] = 0
+        return matches, None
     except Exception as e:
+        match_state["foys_error_count"] = match_state.get("foys_error_count", 0) + 1
         print(f"[FOYS] get_matches failed: {e}")
         return [], "Geen verbinding met FOYS. Controleer de internetverbinding."
 
@@ -247,9 +256,59 @@ def select_match(match_id):
                            selected=match_id, message=f"Selected: {match['homeTeamName']} vs {match['awayTeamName']}")
 
 
+def _age(ts):
+    """Seconds since ts, or None if never set."""
+    return None if ts is None else round(time.time() - ts, 1)
+
+
+def system_status():
+    """Derived health indicators. Computed at read time so a dead thread
+    cannot leave a stale green behind."""
+    anatec_age = _age(match_state.get("anatec_last_frame_ts"))
+    foys_age   = _age(match_state.get("foys_last_ok_ts"))
+    mode       = match_state.get("anatec_mode", "off")
+
+    if mode == "off":
+        anatec = "off"
+    elif anatec_age is None:
+        anatec = "red"
+    elif anatec_age < 2:
+        anatec = "green"
+    elif anatec_age < 10:
+        anatec = "amber"
+    else:
+        anatec = "red"
+
+    if match_state.get("foys_mode") == "mock":
+        foys = "off"
+    elif not match_state.get("foys_auth_ok"):
+        foys = "red"
+    elif foys_age is None:
+        foys = "amber"
+    elif foys_age < 15:
+        foys = "green"
+    elif foys_age < 60:
+        foys = "amber"
+    else:
+        foys = "red"
+
+    return {
+        "anatec":       anatec,
+        "anatec_age":   anatec_age,
+        "anatec_mode":  mode,
+        "anatec_port":  match_state.get("anatec_port"),
+        "foys":         foys,
+        "foys_age":     foys_age,
+        "foys_mode":    match_state.get("foys_mode"),
+        "foys_errors":  match_state.get("foys_error_count", 0),
+        "match_status": match_state.get("status"),
+        "selected":     match_state.get("selected"),
+    }
+
+
 @app.route("/api/state")
 def api_state():
-    return jsonify(match_state)
+    return jsonify({**match_state, "system": system_status()})
 
 @app.route("/api/players")
 def api_players():
@@ -366,13 +425,21 @@ if __name__ == "__main__":
         match_state.update(mock["anatec"])
         match_state["status"] = "Final" if args.finalised else "InProgress"
         match_state["_mock_players"] = mock["players"]
+        match_state["foys_mode"] = "mock"
         print("Running in MOCK mode" + (" — finalised" if args.finalised else " — InProgress"))
     else:
         if args.demo:                                 # ← add
             os.environ["FOYS_DEMO_MODE"] = "true"    # ← add
+            match_state["foys_mode"] = "demo"
             print("Using FOYS demo environment") 
         print("Authenticating with FOYS...")
-        client.authenticate()
+        try:
+            client.authenticate()
+            match_state["foys_auth_ok"] = True
+        except Exception as e:
+            match_state["foys_auth_ok"] = False
+            print(f"[FOYS] Authentication failed: {e}")
+            print("Continuing without FOYS — Anatec data will still work.")
         print("Starting FOYS background poller...")
         t = threading.Thread(target=poll, daemon=True)
         t.start()

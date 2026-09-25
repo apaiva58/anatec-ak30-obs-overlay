@@ -48,4 +48,12 @@ match_state = {
     "anatec_service_dot":  False,
     "anatec_home_timeouts": 0,
     "anatec_guest_timeouts": 0,
+    # System health — written by reader/poller, read by the status card
+    "anatec_mode":         "off",    # off | serial | simulate | mock
+    "anatec_port":         None,
+    "anatec_last_frame_ts": None,
+    "foys_mode":           "live",   # live | demo | mock
+    "foys_auth_ok":        False,
+    "foys_last_ok_ts":     None,
+    "foys_error_count":    0,
 }
