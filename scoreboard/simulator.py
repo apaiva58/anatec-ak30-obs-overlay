@@ -39,6 +39,11 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 from parser import parse, format_clock
 
+# The AK30 transmits continuously at roughly 11 frames/sec (2400 baud 8N1,
+# 22 bytes on the wire per frame). A stopped clock is still a stream of
+# identical frames, not silence — hold() below reproduces that.
+FRAME_PERIOD = 0.09
+
 
 def make_frame(
     home_score=0,
@@ -148,6 +153,18 @@ def game_sequence():
         s.update(kwargs)
         return make_frame(**s), label, pause
 
+    def hold(label, seconds, **kwargs):
+        """Re-emit the current frame at hardware cadence for `seconds`.
+
+        Used wherever the game pauses. The real console keeps transmitting,
+        so the reader keeps seeing fresh frames; sleeping instead would make
+        the feed look dead to any freshness check.
+        """
+        s.update(kwargs)
+        frame = make_frame(**s)
+        for _ in range(max(1, round(seconds / FRAME_PERIOD))):
+            yield frame, label, FRAME_PERIOD
+
     def clock_run(from_min, from_sec, to_min, to_sec, step_pause=0.08):
         total_from = from_min * 60 + from_sec
         total_to   = to_min * 60 + to_sec
@@ -158,7 +175,7 @@ def game_sequence():
                         clock_min=m, clock_sec=sec, clock_tenths=None, clock_running=True)
 
     # Baseline
-    yield state("Baseline", pause=1, clock_running=False, clock_min=2, clock_sec=0)
+    yield from hold("Baseline", 1, clock_running=False, clock_min=2, clock_sec=0)
 
     # Clock starts — 2:00 to 1:45, home scores 2 while clock runs
     yield state("Clock starts", clock_running=True)
@@ -179,11 +196,11 @@ def game_sequence():
     yield from clock_run(1, 5, 0, 56)
 
     # Away foul — clock stops
-    yield state("Away foul (1)", clock_running=False,
-                clock_min=0, clock_sec=55, away_fouls=1, pause=1.5)
+    yield from hold("Away foul (1)", 1.5, clock_running=False,
+                    clock_min=0, clock_sec=55, away_fouls=1)
 
     # Free throw — clock stopped
-    yield state("Home free throw (5:5)", home_score=5, pause=1.5)
+    yield from hold("Home free throw (5:5)", 1.5, home_score=5)
 
     # Clock resumes — 0:55 to 0:36
     yield state("Clock resumes", clock_running=True)
@@ -197,10 +214,10 @@ def game_sequence():
     yield state("Guest +2 (5:10)", guest_score=10, clock_min=0, clock_sec=25, pause=0.08)
 
     # Home timeout — clock stops
-    yield state("Home timeout", clock_running=False,
-                clock_min=0, clock_sec=25,
-                timeout_active="home", home_timeouts=1, pause=3)
-    yield state("Timeout ends", timeout_active=None, pause=0.5)
+    yield from hold("Home timeout", 3, clock_running=False,
+                    clock_min=0, clock_sec=25,
+                    timeout_active="home", home_timeouts=1)
+    yield from hold("Timeout ends", 0.5, timeout_active=None)
 
     # Clock resumes — 0:25 to 0:16
     yield state("Clock resumes", clock_running=True)
@@ -222,13 +239,13 @@ def game_sequence():
                        clock_running=False, pause=0.08)
 
     # Buzzer
-    yield state("Buzzer", clock_sec=0, clock_tenths=0,
-                service_dot=True, pause=2)
-    yield state("End of period", service_dot=False,
-                clock_running=False, pause=1)
+    yield from hold("Buzzer", 2, clock_sec=0, clock_tenths=0,
+                    service_dot=True)
+    yield from hold("End of period", 1, service_dot=False,
+                    clock_running=False)
     # Hold at 0:00 for 30 seconds — gives OBS scene switcher time to detect
-    yield state("Hold 0:00", clock_sec=0, clock_tenths=0,
-                service_dot=False, clock_running=False, pause=30)
+    yield from hold("Hold 0:00", 30, clock_sec=0, clock_tenths=0,
+                    service_dot=False, clock_running=False)
 
 
 def run():
@@ -236,11 +253,17 @@ def run():
     print("=" * 50)
     print()
 
+    last_label = None
     for frame, label, pause in game_sequence():
         parsed = parse(frame)
         if not parsed:
             print(f"[PARSE ERROR] {label}")
             continue
+        if label == last_label:
+            # repeated hold frame — stream it, but do not reprint
+            time.sleep(pause)
+            continue
+        last_label = label
         clock = format_clock(parsed)
         print(f"[{clock}] {label}")
         print(f"  Home {parsed['home_score']} — {parsed['guest_score']} Guest"
