@@ -197,20 +197,30 @@ def poll():
 
 # ── Flask routes ────────────────────────────────────────────────────────────
 
+def safe_get_matches():
+    """Fetch matches from FOYS. Returns (matches, error_message)."""
+    try:
+        return client.get_matches(), None
+    except Exception as e:
+        print(f"[FOYS] get_matches failed: {e}")
+        return [], "Geen verbinding met FOYS. Controleer de internetverbinding."
+
+
 @app.route("/")
 def select():
-    matches = client.get_matches()
-    return render_template("select.html", matches=matches)
+    matches, foys_error = safe_get_matches()
+    return render_template("select.html", matches=matches, foys_error=foys_error)
 
 
 @app.route("/select/<int:match_id>")
 def select_match(match_id):
     global seen_offense_ids
-    matches = client.get_matches()
+    matches, foys_error = safe_get_matches()
     match   = next((m for m in matches if m["id"] == match_id), None)
 
     if not match:
-        return "Match not found", 404
+        return render_template("select.html", matches=matches,
+                               foys_error=foys_error or "Wedstrijd niet gevonden."), 404
 
     seen_offense_ids = set()
     match_state.update({
@@ -233,7 +243,7 @@ def select_match(match_id):
         "match_location":   match["accommodationName"],
         "match_court":      match["fieldName"],
     })
-    return render_template("select.html", matches=matches,
+    return render_template("select.html", matches=matches, foys_error=foys_error,
                            selected=match_id, message=f"Selected: {match['homeTeamName']} vs {match['awayTeamName']}")
 
 

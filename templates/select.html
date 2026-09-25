@@ -75,6 +75,15 @@
             margin-bottom: 20px;
             font-size: 0.9rem;
         }
+        .error {
+            background: #4a2020;
+            color: #ff8080;
+            border: 1px solid #803030;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
         .overlay-link {
             display: block;
             text-align: center;
@@ -88,6 +97,10 @@
 <body>
     <h1>Almere Pioneers</h1>
     <p class="subtitle">Selecteer de wedstrijd voor de live overlay</p>
+
+    {% if foys_error %}
+    <div class="error">{{ foys_error }}</div>
+    {% endif %}
 
     {% if message %}
     <div class="message">✓ {{ message }}</div>
@@ -118,7 +131,7 @@
 
     {% if selected %}
     <p class="overlay-link">
-        OBS Browser Source: <a href="/overlay">http://localhost:5000/overlay</a>
+        OBS Browser Source: <a href="/overlay">http://localhost:5001/overlay</a>
     </p>
     {% endif %}
 </body>
