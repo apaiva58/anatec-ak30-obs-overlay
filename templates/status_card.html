@@ -91,6 +91,7 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
 (function () {
     var MODUS_LABEL = {
         serial:   "Live",
+        auto:     "Live (auto)",
         simulate: "Simulatie",
         mock:     "Mock",
         off:      "Anatec uit"
@@ -121,7 +122,7 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
 
     function hintFor(sys) {
         // One line, most actionable first.
-        if (sys.anatec === "red" && sys.anatec_mode === "serial") {
+        if (sys.anatec === "red" && (sys.anatec_mode === "serial" || sys.anatec_mode === "auto")) {
             return "Anatec: geen data. Controleer de USB-kabel en of het bedieningspaneel aanstaat.";
         }
         if (sys.foys === "red") {
@@ -149,7 +150,7 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
                 var sys = s.system || {};
 
                 var mode = sys.anatec_mode || "off";
-                var modeIsLive = (mode === "serial" && sys.foys_mode === "live");
+                var modeIsLive = ((mode === "serial" || mode === "auto") && sys.foys_mode === "live");
                 setDot("dot-modus", modeIsLive ? "green" : "amber");
                 setText("val-modus", MODUS_LABEL[mode] || mode);
 

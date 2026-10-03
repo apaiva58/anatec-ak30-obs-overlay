@@ -1,11 +1,72 @@
 """
 server.py
 =========
-Flask server — serves match selection UI, overlay data endpoint,
-and runs the FOYS background poller.
+Flask server for the Anatec AK30 OBS overlay. Serves the match-selection
+UI, the overlay pages OBS renders, a live status card, and the JSON state
+endpoint they all poll. Runs the FOYS background poller and the Anatec
+reader, and drives OBS scene switching over its websocket.
 
-Usage:
-    python scoreboard/server.py
+Usage
+-----
+    python3 scoreboard/server.py [options]
+
+Match day (auto-detect the console, live FOYS):
+    python3 scoreboard/server.py --anatec auto
+
+Development (no hardware, no FOYS, no OBS):
+    python3 scoreboard/server.py --anatec simulate --mock --no-obs
+
+Options
+-------
+    --anatec MODE   Anatec input. Default: simulate
+                      auto      probe serial ports, pick the one emitting
+                                AK30 frames, rediscover if the link drops
+                      serial    read a fixed port given with --port
+                      simulate  replay a scripted game from simulator.py
+                      off       FOYS data only
+    --port PATH     Serial port for --anatec serial.
+                    Default: /dev/tty.usbserial-1110 (suffix varies by
+                    USB socket on macOS; prefer --anatec auto)
+    --demo          Use the FOYS demo environment
+    --mock          Load mock_data.json and skip FOYS authentication
+    --finalised     With --mock, set match status to Final
+    --no-obs        Do not connect to OBS or switch scenes
+
+Environment (.env)
+------------------
+    FOYS_USERNAME, FOYS_PASSWORD, FOYS_ORGANISATION_ID,
+    FOYS_ORGANISATION_ID_DEMO, FOYS_DEMO_MODE
+    OBS_WEBSOCKET_PASSWORD      from OBS: Tools > WebSocket Server Settings
+
+Routes
+------
+    /                   match selection, with status card (operator)
+    /select/<id>        choose a match; starts live polling for it
+    /status             status card alone; add to OBS as a Custom Browser
+                        Dock (Docks > Custom Browser Docks)
+    /api/state          match_state as JSON plus a derived `system` block
+    /api/players        rosters for the selected match
+    /overlay            combined live + final overlay
+    /overlay/wide       bottom bar
+    /overlay/box        corner box
+    /overlay/stats      end-of-period player stats
+    /overlay/final      final score
+    /overlay/anatec     Anatec-only overlay
+    /overlay/foys       FOYS-only overlay
+
+OBS wiring
+----------
+    Browser Source      http://localhost:5001/overlay/wide  (or another
+                        overlay route) at the canvas size
+    Custom Browser Dock http://localhost:5001/status
+    Scene names the switcher expects are in obs_watcher() below.
+
+Notes
+-----
+    The server stays up if FOYS authentication fails: Anatec data still
+    flows, the status card shows FOYS red. Serial ports are exclusive, so
+    stop capture.py before starting the server in serial or auto mode.
+    Port 5001. Templates reload on edit; route changes need a restart.
 """
 
 import os
@@ -420,8 +481,9 @@ def overlay_stats():
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--anatec", choices=["serial", "simulate", "off"],
-                    default="simulate", help="Anatec reader mode")
+    ap.add_argument("--anatec", choices=["serial", "auto", "simulate", "off"],
+                    default="simulate",
+                    help="Anatec reader mode: serial (needs --port), auto (discover port), simulate, off")
     ap.add_argument("--port", default="/dev/tty.usbserial-1110",
                     help="Serial port for Anatec")
     ap.add_argument("--demo", action="store_true",
