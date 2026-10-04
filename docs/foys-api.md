@@ -3,6 +3,13 @@
 This document describes how the FOYS DWF API is used in the
 Almere Pioneers scoreboard overlay stack.
 
+Statements marked "verified" were observed in live responses on the
+date given. Anything unmarked is carried over from earlier versions of
+this document and has not been re-checked. When the API behaves
+unexpectedly, a HAR export from the DWF web client (Safari Web
+Inspector, Network tab) shows what the client itself sends; that is the
+only documentation guaranteed to be correct. See probes/README.md.
+
 ---
 
 ## Architecture
@@ -142,23 +149,57 @@ Fields used:
 ### Offenses
 
 ```
-GET /competition/dmf-api/v1/matches/{matchId}/offenses
+GET /competition/dmf-api/v1/matches/{matchId}/offenses/all
 ```
 
-Returns {"totalCount": N, "items": [...]} - extract items array.
+Returns a plain list of every offense in the match, as flat records
+(verified 4 Oct 2026, match 501153: 34 rows):
 
-Used for team foul count per period and player foul count.
-Only fouls where matchPlayer.matchRole.type == "Player" count
-towards team fouls. Coach and bench technicals (TC, TB) excluded.
+- id                        unique per offense
+- matchPlayerId             join key into the match roster
+- periodId                  14..17 = Q1..Q4 (see Period Mapping)
+- offenseTypeId             e.g. 19 = P2, 21 = P0
+- offenseTypeCode           P0, P1, P2, FL ... (see Offense codes)
+- offenseTypeGroupCode      P for personal fouls
+- matchId
 
-Fields used:
-- matchPlayer.teamId
-- matchPlayer.matchRole.type    Player or Coach
-- offenseType.code              P1, P2, P3, T, TC, TB, U, D, F
-- periodId
-- matchPlayerId                 for player stats
+There is no matchLogId on these rows, and no embedded matchPlayer or
+offenseType object.
 
-Offense codes reference: see docs/foys-api.md
+Do NOT use plain /offenses. It returns {"totalCount": N, "items": [...]}
+hard-capped at the FIRST 10 rows, oldest first, and nothing moves or
+enlarges the page (verified 4 Oct 2026, match 501153: totalCount 34,
+items 10; 45 query-parameter and header forms tried, all ignored; the
+response headers carry no paging hints). Everything after the tenth
+offense of a match is invisible through it. On 3 Oct 2026 this stopped
+foul popups and per-player foul counts after the tenth foul of the
+match. The only filter plain /offenses honours is ?teamId=<id>
+(totalCount becomes that team's count, still capped at 10 rows);
+periodId, matchPlayerId, offenseTypeId and variants are ignored.
+
+The client joins roster data back in. FoysClient.get_offenses() fetches
+the roster from GET /matches/{id} (homeTeamMatchPlayers and
+awayTeamMatchPlayers, matched on matchPlayerId) and rebuilds the shape
+callers expect:
+
+- f["matchPlayer"]   teamId, teamNumber, matchRole.type, person.fullName
+- f["offenseType"]   id, code, group
+
+The roster is cached per match. An unknown matchPlayerId triggers one
+refresh and is then remembered, so it does not cost a request per poll.
+Unknown players are kept with matchRole.type "Unknown" so the
+Player-only filters skip them.
+
+Used for team foul count per period and player foul count. Only fouls
+where matchPlayer.matchRole.type == "Player" count towards team fouls;
+coach and bench technicals are excluded by that role filter.
+
+Offense codes. Seen in live data: P0 (id 21), P2 (id 19). Seen on the
+printed match form: P0, P1, P2 and FL (flagrant foul, player). NOT
+verified: P3, T, TC, TB, U, D, F were listed in an earlier version of
+this document and have never appeared in a payload. The authoritative
+list is GET /offense-types?sorting=position+asc, which the DWF client
+calls. Fetch it rather than trusting a table here.
 
 ### Timeouts
 
@@ -166,11 +207,34 @@ Offense codes reference: see docs/foys-api.md
 GET /competition/dmf-api/v1/matches/{matchId}/timeouts
 ```
 
-Returns {"totalCount": N, "items": [...]} - extract items array.
+Returns a plain list (verified 4 Oct 2026, match 501153: 3 items), not
+an envelope. /timeouts/all is 404. FoysClient.get_timeouts() accepts
+either shape. Not checked: whether it envelopes and caps when more than
+ten exist, which a match rarely reaches.
 
 Fields used:
 - isHomeTeam    true or false
 - periodId
+
+### Other endpoints seen (verified 4 Oct 2026, match 501153)
+
+```
+GET /matches/{matchId}                 match detail and roster
+GET /matches/{matchId}/logs            unified play-by-play
+GET /offense-types?sorting=position+asc    offense code table
+```
+
+- /matches/{id} carries homeTeamMatchPlayers and awayTeamMatchPlayers
+  (id, teamId, teamNumber, matchRole, person, totalPoints). There is no
+  per-player foul field, only points.
+- /logs returned 132 rows: 91 goal rows, 34 offenses, 3 timeouts and 4
+  other events. One endpoint for the whole game, in order. Not used yet.
+- /goals is a plain list with no envelope and no cap.
+
+The DWF web client lists only live and upcoming matches, so a finalised
+match cannot be opened there to watch how it fetches. Use the demo
+organisation (FOYS_DEMO_MODE=true) for that. Demo match ids return 404
+under live credentials, and live ids under demo credentials.
 
 ---
 
@@ -211,6 +275,11 @@ FOYS uses numeric period IDs:
   periodId 16   3e kwart
   periodId 17   4e kwart
   periodId 18+  Overtime
+
+Period ids rise through the game, so the highest periodId seen across
+goals and offenses is the current period. server.py current_period()
+uses exactly that. It does not rank events by matchLogId, which
+/offenses/all rows do not carry.
 
 ---
 
@@ -255,16 +324,26 @@ When Anatec is not connected, clock shows a dash.
 - FOYS score latency expected - Anatec score used for live display
 - API requires authentication - returns 401 without token
 - FOYS server load on Saturday mornings may cause polling delays
+- Plain /offenses is capped at 10 rows with no way round it; use
+  /offenses/all (see Offenses)
+- /offenses/all rows are flat: no matchLogId, no embedded matchPlayer
+- A transient poll error "'>' not supported between instances of
+  'NoneType' and 'int'" occurred 4 times in the 3 Oct 2026 match log,
+  each time for one cycle. It is consistent with a null matchLogId on a
+  freshly created event, but that was never observed directly. The old
+  current_period() ranked by matchLogId; the current one does not, so it
+  cannot recur from that cause.
 
 ---
 
 ## Files
 
-  scoreboard/foys.py       FOYS API client - auth and fetch
+  scoreboard/foys.py       FOYS API client - auth, fetch, roster join
   scoreboard/server.py     Flask server - poll loop and routes
   scoreboard/state.py      Shared in-memory match state
   templates/overlay.html   Combined live and final overlay
   templates/select.html    Match selection UI
+  probes/                  Read-only API diagnostics (probes/README.md)
   .env                     Credentials (not in git)
 
 ---
@@ -273,5 +352,5 @@ When Anatec is not connected, clock shows a dash.
 
 - FOYS developer portal: https://developers.foys.tech
 - FOYS DWF demo: https://dwf.basketball.nl/matches/487998/progress
-- Raw API documentation: docs/foys-api.md
+- Probe scripts and what each one answered: probes/README.md
 - NBB Basketball Nederland: https://www.basketball.nl
