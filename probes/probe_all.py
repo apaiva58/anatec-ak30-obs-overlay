@@ -7,13 +7,13 @@ Read-only. The DWF web client fetches /matches/{id}/offenses/all, not
 Also tries /timeouts/all and /logs, since the client calls those too.
 
 Run from the repo root:
-    python3 probe_all.py 501153 524518
+    python3 probes/probe_all.py 501153 524518
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scoreboard"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scoreboard"))
 from foys import FoysClient  # noqa: E402
 
 

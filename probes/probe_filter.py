@@ -8,13 +8,13 @@ A honoured filter shows as totalCount dropping below the unfiltered total
 and ids that are a strict subset. An ignored filter returns the same 10.
 
 Run from the repo root:
-    python3 probe_filter.py 501153
+    python3 probes/probe_filter.py 501153
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scoreboard"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scoreboard"))
 from foys import FoysClient  # noqa: E402
 
 # periodId 14-17 = Q1-Q4. teamIds come from the match detail.

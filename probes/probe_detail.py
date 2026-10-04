@@ -7,14 +7,14 @@ If each player row carries a foul count, poll() can diff counts between
 polls to detect "player X just fouled" without the capped /offenses list.
 
 Run from the repo root:
-    python3 probe_detail.py 501153
+    python3 probes/probe_detail.py 501153
 """
 
 import os
 import sys
 import json
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scoreboard"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scoreboard"))
 from foys import FoysClient  # noqa: E402
 
 
