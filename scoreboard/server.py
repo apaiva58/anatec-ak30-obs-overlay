@@ -30,13 +30,24 @@ Options
     --demo          Use the FOYS demo environment
     --mock          Load mock_data.json and skip FOYS authentication
     --finalised     With --mock, set match status to Final
-    --no-obs        Do not connect to OBS or switch scenes
+    --no-obs        Dry run for scene control: decisions are logged and shown
+                    on the status dock, OBS is not contacted
 
 Environment (.env)
 ------------------
     FOYS_USERNAME, FOYS_PASSWORD, FOYS_ORGANISATION_ID,
     FOYS_ORGANISATION_ID_DEMO, FOYS_DEMO_MODE
     OBS_WEBSOCKET_PASSWORD      from OBS: Tools > WebSocket Server Settings
+    OBS_WEBSOCKET_HOST, OBS_WEBSOCKET_PORT   default localhost and 4455
+    OBS_SCENE_COURT             scene for play (default: Scène 2: WIDE Overlay)
+    OBS_SCENE_HALFTIME          scene for the halftime break (default:
+                                Scène 4: STATS)
+    OBS_SCENE_FINAL             scene for a finalised match (default: the
+                                halftime scene; later e.g. Final Stats)
+    OBS_STATS_AFTER_PERIODS     period ends that get the halftime scene
+                                (default 2; 1,2,3 for every break)
+    OBS_STATS_DELAY             seconds between the buzzer and that scene
+                                (default 2.0)
 
 Routes
 ------
@@ -59,7 +70,8 @@ OBS wiring
     Browser Source      http://localhost:5001/overlay/wide  (or another
                         overlay route) at the canvas size
     Custom Browser Dock http://localhost:5001/status
-    Scene names the switcher expects are in obs_watcher() below.
+    Scene names and which period ends switch scenes are set in .env (see
+    above). The rules are in scene_logic.py and explained in docs/scenes.md.
 
 Notes
 -----
@@ -75,74 +87,35 @@ import time
 from flask import Flask, jsonify, render_template, make_response
 from foys import FoysClient
 from state import match_state
+from scene_control import ObsClient, DryObs, SceneController
+from scene_logic import SceneDirector, parse_periods, parse_seconds
 
 app = Flask(__name__, template_folder="../templates")
 client = FoysClient()
 
 
-# ── OBS WebSocket scene switcher ────────────────────────────────────────────
+# ── Scene control configuration ─────────────────────────────────────────────
 
-def obs_switch_scene(scene_name):
-    """Switch OBS scene via WebSocket. Fails silently if OBS not connected."""
-    try:
-        import obsws_python as obs
-        cl = obs.ReqClient(host="localhost", port=4455, password=os.getenv("OBS_WEBSOCKET_PASSWORD"), timeout=3)
-        cl.set_current_program_scene(scene_name)
-        cl.disconnect()
-        print(f"[OBS] Switched to: {scene_name}")
-    except Exception as e:
-        print(f"[OBS] Scene switch failed: {e}")
+# The decisions live in scene_logic.py, the OBS side in scene_control.py.
+# Everything here is set in .env; the defaults are shown.
+
+SCENES = {
+    "court":    os.getenv("OBS_SCENE_COURT",    "Scène 2: WIDE Overlay"),
+    "halftime": os.getenv("OBS_SCENE_HALFTIME", "Scène 4: STATS"),
+}
+# The scene for a finalised match. Until a dedicated scene exists it is the
+# halftime scene; create "Final Stats" in OBS, set OBS_SCENE_FINAL=Final Stats
+# and restart. No code change needed.
+SCENES["final"] = os.getenv("OBS_SCENE_FINAL", SCENES["halftime"])
+
+# Which period ends put the halftime scene on air: "2", or "1,2,3" for every break.
+STATS_AFTER_PERIODS = parse_periods(os.getenv("OBS_STATS_AFTER_PERIODS", "2"))
+
+# Seconds to keep the court on air after the buzzer before the stats scene.
+STATS_DELAY_S = parse_seconds(os.getenv("OBS_STATS_DELAY"), 2.0)
 
 
-def obs_watcher():
-    """
-    Background thread — watches Anatec clock and switches OBS scenes.
 
-    Logic:
-    - End of period 1, 2 or 3 (clock hits 0:00) → switch to Scène 4: STATS
-    - Clock running again in new period           → switch back to Scène 2: WIDE Overlay
-    - End of period 4 or overtime (5)             → no automatic switch
-    """
-    last_period    = None
-    showing_stats  = False
-    tracked_period = None   # ← was missing
-    max_clock_seen = 0
-
-    while True:
-        try:
-            minutes    = match_state.get("anatec_clock_min", 0)
-            seconds    = match_state.get("anatec_clock_sec", 0)
-            period     = match_state.get("anatec_period")
-            total_secs = minutes * 60 + seconds
-
-            # Reset when period changes
-            if period != tracked_period:
-                tracked_period = period
-                max_clock_seen = 0
-
-            # Track highest clock value seen in this period
-            if period in [1, 2, 3, 4]:
-                max_clock_seen = max(max_clock_seen, total_secs)
-
-            # End of period 1, 2 or 3 → switch to STATS
-            if (total_secs == 0
-                    and max_clock_seen > 0
-                    and period != last_period
-                    and period in [1, 2, 3]):
-                last_period    = period
-                showing_stats  = True
-                max_clock_seen = 0
-                obs_switch_scene("Scène 4: STATS")
-
-            # Clock moved off 0:00 → switch back to WIDE
-            elif showing_stats and total_secs > 0:
-                showing_stats = False
-                obs_switch_scene("Scène 2: WIDE Overlay")
-
-        except Exception as e:
-            print(f"[OBS watcher] {e}")
-
-        time.sleep(1)
         
 # ── Helper functions ────────────────────────────────────────────────────────
 
@@ -165,6 +138,15 @@ def current_period(goals, offenses):
     depending on matchLogId -- which /offenses/all rows do not carry and
     which FOYS briefly reports as null on freshly created goals."""
     periods = [e.get("periodId") for e in (goals or []) + (offenses or [])
+               if e.get("periodId") is not None]
+    return max(periods) if periods else None
+
+
+def max_event_period(*event_lists):
+    """Highest periodId over goals, offenses and timeouts: the latest period
+    with any recorded play. Unlike current_period() it includes timeouts, and
+    scene control uses it as evidence that play has resumed."""
+    periods = [e.get("periodId") for events in event_lists for e in (events or [])
                if e.get("periodId") is not None]
     return max(periods) if periods else None
 
@@ -202,6 +184,7 @@ def poll():
                     offenses = client.get_offenses(match_id)
                     timeouts = client.get_timeouts(match_id)
                     period   = current_period(goals, offenses)
+                    match_state["foys_event_period"] = max_event_period(goals, offenses, timeouts)
                     match_state["foys_last_ok_ts"]  = time.time()
                     match_state["foys_error_count"] = 0
 
@@ -309,6 +292,7 @@ def select_match(match_id):
         "home_club":  match["homeTeamOrganisationName"],
         "away_club":  match["awayTeamOrganisationName"],
         "last_foul":  None,
+        "foys_event_period": None,
         "home_logo":        match["homeTeamOrganisationUrl"],
         "away_logo":        match["awayTeamOrganisationUrl"],
         "match_date":       match["date"][:10],
@@ -361,6 +345,15 @@ def system_status():
     else:
         foys = "red"
 
+    if not match_state.get("obs_enabled"):
+        obs = "off"
+    elif not match_state.get("obs_available"):
+        obs = "red"
+    elif match_state.get("obs_missing_scenes"):
+        obs = "amber"
+    else:
+        obs = "green"
+
     return {
         "anatec":       anatec,
         "anatec_age":   anatec_age,
@@ -372,6 +365,10 @@ def system_status():
         "foys_errors":  match_state.get("foys_error_count", 0),
         "match_status": match_state.get("status"),
         "selected":     match_state.get("selected"),
+        "obs":          obs,
+        "obs_scene":    match_state.get("obs_scene"),
+        "obs_missing":  match_state.get("obs_missing_scenes") or [],
+        "scene_prompt": match_state.get("scene_prompt"),
     }
 
 
@@ -493,7 +490,8 @@ if __name__ == "__main__":
                     help="Use FOYS demo environment")
     ap.add_argument("--mock", action="store_true", help="Load mock data, skip FOYS auth")
     ap.add_argument("--finalised", action="store_true", help="Set mock status to Final")
-    ap.add_argument("--no-obs", action="store_true", help="Disable OBS scene switching")
+    ap.add_argument("--no-obs", action="store_true",
+                    help="Dry run for scene control: log decisions, do not contact OBS")
     args = ap.parse_args()
 
     if args.mock:
@@ -528,12 +526,20 @@ if __name__ == "__main__":
         from reader import start_reader
         start_reader(mode=args.anatec, port=args.port)
 
-    if not args.no_obs:
-        print("Starting OBS scene watcher...")
-        obs_thread = threading.Thread(target=obs_watcher, daemon=True)
-        obs_thread.start()
+    scene_names = list(dict.fromkeys(SCENES.values()))
+    if args.no_obs:
+        print("Scene control in dry-run mode (--no-obs): decisions are logged, OBS is not contacted")
+        obs = DryObs(scene_names, start=SCENES["court"])
     else:
-        print("OBS scene switching disabled (--no-obs)")
+        print("Starting scene control...")
+        obs = ObsClient(host=os.getenv("OBS_WEBSOCKET_HOST", "localhost"),
+                        port=int(os.getenv("OBS_WEBSOCKET_PORT", "4455")),
+                        password=os.getenv("OBS_WEBSOCKET_PASSWORD"))
+    director = SceneDirector(SCENES, stats_after=STATS_AFTER_PERIODS,
+                             stats_delay=STATS_DELAY_S)
+    controller = SceneController(match_state, obs, director, SCENES,
+                                 live=not args.no_obs)
+    threading.Thread(target=controller.run, daemon=True).start()
 
     print("Server running at http://localhost:5001")
     app.run(host="0.0.0.0", port=5001, debug=False)

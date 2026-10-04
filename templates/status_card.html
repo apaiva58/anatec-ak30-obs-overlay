@@ -84,6 +84,11 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
         <span class="lbl">Wedstrijd</span>
         <span class="val" id="val-match">—</span>
     </div>
+    <div class="status-row">
+        <span class="dot" id="dot-obs"></span>
+        <span class="lbl">Scène</span>
+        <span class="val" id="val-obs">—</span>
+    </div>
     <div class="status-hint" id="status-hint"></div>
 </div>
 
@@ -122,6 +127,15 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
 
     function hintFor(sys) {
         // One line, most actionable first.
+        if (sys.obs === "red") {
+            return "OBS niet bereikbaar. Controleer de WebSocket-instellingen en het wachtwoord.";
+        }
+        if (sys.obs === "amber" && sys.obs_missing && sys.obs_missing.length) {
+            return "Scène ontbreekt in OBS: " + sys.obs_missing.join(", ") + ".";
+        }
+        if (sys.scene_prompt) {
+            return sys.scene_prompt;
+        }
         if (sys.anatec === "red" && (sys.anatec_mode === "serial" || sys.anatec_mode === "auto")) {
             return "Anatec: geen data. Controleer de USB-kabel en of het bedieningspaneel aanstaat.";
         }
@@ -176,11 +190,21 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
                     setText("val-match", "Geen selectie");
                 }
 
+                // The scene OBS really shows. Off means a dry run (--no-obs).
+                setDot("dot-obs", sys.obs || "off");
+                if (sys.obs === "off") {
+                    setText("val-obs", "Uit");
+                } else if (sys.obs === "red") {
+                    setText("val-obs", "Geen verbinding");
+                } else {
+                    setText("val-obs", sys.obs_scene || "—");
+                }
+
                 setText("status-hint", hintFor(sys));
             })
             .catch(function () {
                 // Server unreachable — everything unknown, say so plainly.
-                ["modus", "anatec", "foys", "match"].forEach(function (k) {
+                ["modus", "anatec", "foys", "match", "obs"].forEach(function (k) {
                     setDot("dot-" + k, "red");
                     setText("val-" + k, "—");
                 });

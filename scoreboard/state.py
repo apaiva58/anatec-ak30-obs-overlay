@@ -43,6 +43,7 @@ match_state = {
     "anatec_clock":        "10:00",
     "anatec_clock_min":    10,
     "anatec_clock_sec":    0,
+    "anatec_clock_tenths": None,   # None at 1:00 and above, 0-9 below one minute
     "anatec_clock_running": False,
     "anatec_timeout":      None,
     "anatec_service_dot":  False,
@@ -56,4 +57,11 @@ match_state = {
     "foys_auth_ok":        False,
     "foys_last_ok_ts":     None,
     "foys_error_count":    0,
+    "foys_event_period":   None,   # highest periodId with a goal, foul or timeout
+    # Scene control — written by scene_control, read by the status dock
+    "obs_enabled":         False,   # False under --no-obs (dry run)
+    "obs_available":       False,
+    "obs_scene":           None,    # the scene actually on air, read from OBS
+    "obs_missing_scenes":  [],      # configured scenes that do not exist in OBS
+    "scene_prompt":        None,    # one line for the operator
 }

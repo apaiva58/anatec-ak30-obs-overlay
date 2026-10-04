@@ -231,20 +231,24 @@ def game_sequence():
     yield state("Home +2 (9:10)", home_score=9, clock_min=0, clock_sec=5, pause=0.08)
     yield from clock_run(0, 5, 0, 1)
 
-    # Sub-second countdown
-    for sec in range(4, 0, -1):
+    # Sub-second countdown. Ends the way the real console does (capture
+    # 2026-04-23): the last tenths frame is 0:00.1, then the display drops to
+    # plain 0:00 in minute mode. It never shows 0:00.0 at the buzzer.
+    for sec in range(4, -1, -1):
         for tenth in range(9, -1, -1):
+            if sec == 0 and tenth == 0:
+                break
             yield state(f"Clock 0:{sec:02d}.{tenth}",
                        clock_sec=sec, clock_tenths=tenth,
                        clock_running=False, pause=0.08)
 
-    # Buzzer
-    yield from hold("Buzzer", 2, clock_sec=0, clock_tenths=0,
+    # Buzzer: minute mode (tenths absent), buzzer flag on
+    yield from hold("Buzzer", 2, clock_sec=0, clock_tenths=None,
                     service_dot=True)
     yield from hold("End of period", 1, service_dot=False,
                     clock_running=False)
     # Hold at 0:00 for 30 seconds — gives OBS scene switcher time to detect
-    yield from hold("Hold 0:00", 30, clock_sec=0, clock_tenths=0,
+    yield from hold("Hold 0:00", 30, clock_sec=0, clock_tenths=None,
                     service_dot=False, clock_running=False)
 
 

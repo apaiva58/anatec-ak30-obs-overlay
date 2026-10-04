@@ -177,6 +177,14 @@ match. The only filter plain /offenses honours is ?teamId=<id>
 (totalCount becomes that team's count, still capped at 10 rows);
 periodId, matchPlayerId, offenseTypeId and variants are ignored.
 
+Why the cap exists (inference, not confirmed): the responses carry an
+Application Insights request-context header, which points to an ASP.NET
+service, and {totalCount, items} with a default page of 10 is the usual
+list scaffold there. The paging parameters were probably never wired
+up. The DWF client never calls plain /offenses; it goes straight to
+/offenses/all, which looks like a bypass added beside the capped route.
+/goals has no envelope at all.
+
 The client joins roster data back in. FoysClient.get_offenses() fetches
 the roster from GET /matches/{id} (homeTeamMatchPlayers and
 awayTeamMatchPlayers, matched on matchPlayerId) and rebuilds the shape
@@ -194,12 +202,56 @@ Used for team foul count per period and player foul count. Only fouls
 where matchPlayer.matchRole.type == "Player" count towards team fouls;
 coach and bench technicals are excluded by that role filter.
 
-Offense codes. Seen in live data: P0 (id 21), P2 (id 19). Seen on the
-printed match form: P0, P1, P2 and FL (flagrant foul, player). NOT
-verified: P3, T, TC, TB, U, D, F were listed in an earlier version of
-this document and have never appeared in a payload. The authoritative
-list is GET /offense-types?sorting=position+asc, which the DWF client
-calls. Fetch it rather than trusting a table here.
+Offense codes (verified 4 Oct 2026, GET /offense-types?sorting=position+asc,
+the call the DWF client makes; 12 rows):
+
+  code  group  name
+  T     TF     Technische fout speler categorie 1
+  T2    TF     Technische fout speler categorie 2
+  P3    P      Persoonlijke fout 3
+  P2    P      Persoonlijke fout 2
+  P1    P      Persoonlijke fout 1
+  P0    P      Persoonlijke fout 0
+  C     TF     Technische fout coach categorie 1
+  B     TF     Technische fout bank categorie 1
+  DI    SF     Disruptive fout speler
+  FL    SF     Flagrant fout speler
+  D     SF     Diskwalificatie
+  F     SF     Vechten
+
+Groups: P personal, TF technical, SF serious (disruptive, flagrant,
+disqualifying, fighting). The digit on P0..P3 is part of the code, not
+a count of fouls: a player's first foul can be P2.
+
+Why this differs from earlier versions of this document: the FIBA
+Official Basketball Rules 2026 took effect on 1 October 2026 and changed
+the foul types (FIBA Rules Changes v1.1, July 2026; see References). The
+unsportsmanlike foul (U) is replaced by a disruptive foul (DI) and a
+flagrant foul (FL), Art. 37 and 38. Technical fouls are split into
+category 1 and category 2, Art. 36, which is why there is T and T2. The
+earlier list (T, TC, TB, U, D, F, P1-P3) predates this, and the match of
+3 Oct 2026 already used FL. FIBA's text does not explain TC and TB; its
+scoresheet markings for head-coach and bench technicals are C and B. It
+also adds a marking BD (disqualifying technical against an accompanying
+delegation member), which has no row in the table above.
+
+Which offenses count as team fouls. calculate_fouls() counts every
+offense whose matchPlayer.matchRole.type is "Player", whatever its
+code. Verified against the NBB match form for 501153: this reproduces
+the form's team-foul row in all four quarters (Pioneers 3/3/6/7,
+Felloo 3/3/5/4), including Q3 where a flagrant foul (FL) must be
+counted to reach 6. Verified against FIBA Rules 2026 (Rules Changes
+v1.1): a player technical of either category (T, T2) counts as a team
+foul (Art. 36.3.1), as do a disruptive foul (DI, Art. 37.2.1) and a
+flagrant foul (FL, Art. 38.2.1). A technical foul by anyone on the
+bench (C, B) is charged to the head coach and does NOT count (Art.
+36.3.1). The role filter excludes those only if FOYS attaches them to
+the coach's matchPlayer, which has not been observed. Unverified: D
+(disqualifying) and F (fighting), which the changes document does not
+cover.
+
+The foul popup prints the raw code ("Fout: <name> (#<jersey>) - P2"),
+so viewers see P0, FL, DI and so on verbatim.
 
 ### Timeouts
 
@@ -352,5 +404,7 @@ When Anatec is not connected, clock shows a dash.
 
 - FOYS developer portal: https://developers.foys.tech
 - FOYS DWF demo: https://dwf.basketball.nl/matches/487998/progress
+- FIBA Official Basketball Rules 2026, Rules Changes v1.1 (July 2026):
+  https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-rule-changes-v1-1-en.pdf
 - Probe scripts and what each one answered: probes/README.md
 - NBB Basketball Nederland: https://www.basketball.nl

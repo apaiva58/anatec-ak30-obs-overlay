@@ -82,6 +82,7 @@ def _update_state(parsed: dict):
     match_state["anatec_period"]        = parsed["period"]
     match_state["anatec_clock_min"]     = parsed["clock_min"]
     match_state["anatec_clock_sec"]     = parsed["clock_sec"]
+    match_state["anatec_clock_tenths"]  = parsed["clock_tenths"]   # None at 1:00 and above
     match_state["anatec_clock"]         = format_clock(parsed)
     match_state["anatec_clock_running"] = clock_running
     match_state["anatec_service_dot"]   = parsed["service_dot"]
