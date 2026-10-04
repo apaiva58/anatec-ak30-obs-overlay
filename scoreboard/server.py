@@ -160,10 +160,13 @@ def calculate_fouls(offenses, team_id, period_id):
 
 
 def current_period(goals, offenses):
-    events = (goals or []) + (offenses or [])
-    if not events:
-        return None
-    return max(events, key=lambda e: e.get("matchLogId", 0)).get("periodId")
+    """Highest periodId across all events. Period ids are monotonic
+    (14..17 = Q1..Q4, 18+ = OT), so max() is the current period without
+    depending on matchLogId -- which /offenses/all rows do not carry and
+    which FOYS briefly reports as null on freshly created goals."""
+    periods = [e.get("periodId") for e in (goals or []) + (offenses or [])
+               if e.get("periodId") is not None]
+    return max(periods) if periods else None
 
 
 # ── Background poller ───────────────────────────────────────────────────────
