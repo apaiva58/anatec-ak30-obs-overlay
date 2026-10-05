@@ -64,6 +64,8 @@ Byte positions (confirmed from capture sessions 2026-04-20, 2026-04-23, 2026-04-
   0+1     always 0x30 0x30 — likely shot clock (00 when not connected)
 """
 
+from typing import Optional
+
 FRAME_LENGTH = 21
 
 
@@ -83,7 +85,7 @@ def _number(frame: bytes, *positions) -> int:
     return result
 
 
-def parse(frame: bytes) -> dict | None:
+def parse(frame: bytes) -> Optional[dict]:
     """
     Parse a 21-byte Anatec AK30 data frame (CR terminator already stripped).
     Returns a dict or None if frame is invalid.
