@@ -17,8 +17,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scoreboard"))
 from foys import FoysClient  # noqa: E402
 
-# periodId 14-17 = Q1-Q4. teamIds come from the match detail.
-HOME_TEAM = 48525   # Almere Pioneers M18-1 (from probe_detail)
+# periodId 14-17 = Q1-Q4. Team and player ids are read from the unfiltered
+# response, so nothing about a particular match is baked in here.
 
 
 def summarise(r):
@@ -41,19 +41,22 @@ def main():
     client.authenticate()
     base = f"/matches/{match_id}/offenses"
 
-    total0, ids0, _, teams0 = summarise(client._get(base))
-    away_team = next((t for t in teams0 if t != HOME_TEAM), None)
+    r0 = client._get(base)
+    total0, ids0, _, teams0 = summarise(r0)
+    team_a, team_b = (list(teams0) + [None, None])[:2]
+    items0 = r0["items"] if isinstance(r0, dict) and "items" in r0 else r0
+    player = items0[0].get("matchPlayerId") if items0 else None
     print(f"\nunfiltered: totalCount={total0}, {len(ids0)} items; teams seen {teams0}")
-    print(f"home={HOME_TEAM} away={away_team}")
+    print(f"team_a={team_a} team_b={team_b} player={player}")
 
     forms = [
         "?periodId=14", "?periodId=16", "?periodId=17",
         "?period=14", "?period=3", "?periodNumber=3",
-        f"?teamId={HOME_TEAM}", f"?teamId={away_team}",
-        f"?team={HOME_TEAM}", f"?matchTeamId={HOME_TEAM}",
-        f"?periodId=17&teamId={HOME_TEAM}",
-        f"?matchPlayerId=4854143",   # Bakker, 4 fouls
-        f"?playerId=4854143",
+        f"?teamId={team_a}", f"?teamId={team_b}",
+        f"?team={team_a}", f"?matchTeamId={team_a}",
+        f"?periodId=17&teamId={team_a}",
+        f"?matchPlayerId={player}",
+        f"?playerId={player}",
         "?offenseTypeId=19",          # P2
         "?offenseType=P2",
         "?group=P",
