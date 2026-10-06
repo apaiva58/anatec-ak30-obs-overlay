@@ -21,7 +21,7 @@ match_state = {
     "last_foul":      None,   # for popup: {player, jersey, code, team}
     "status":         "Planned",
     "period_name":   "—",
-    "periods":       {},
+    "periods":       [],   # [{"period": 14, "name": "Q1", "home": 20, "away": 18}, ...]
     "home_timeouts": 0,
     "away_timeouts": 0,
     "home_club":  "",

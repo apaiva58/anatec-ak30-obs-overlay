@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Full-frame closing slate: this page replaces the camera, so the
+           background is opaque. The other overlays sit over the court and
+           are transparent. */
+        body {
+            background: #080c1c;
+            font-family: 'Barlow', sans-serif;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+        }
+
+        #slate {
+            position: absolute;
+            top: 0; bottom: 0; left: 0; right: 0;
+            padding: 48px 80px 40px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── HEADER ──────────────────────────────────────────────── */
+
+        .slate-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        .pioneer-accent {
+            width: 4px;
+            height: 56px;
+            background: #ff6b00;
+            border-radius: 2px;
+            margin-right: 20px;
+            flex-shrink: 0;
+        }
+
+        .match-result {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .result-team { text-align: center; }
+
+        .result-club {
+            font-size: 1rem;
+            color: #aaaaaa;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .result-name {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 2.4rem;
+            font-weight: 800;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+
+        .result-score {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 5rem;
+            font-weight: 900;
+            color: #ff6b00;
+            padding: 0 24px;
+            letter-spacing: -0.02em;
+        }
+
+        .result-label {
+            font-size: 0.9rem;
+            color: #aaaaaa;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            text-align: center;
+        }
+
+        .final-badge {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: #ff6b00;
+            border: 1px solid #ff6b00;
+            padding: 8px 20px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        /* ── QUARTER STRIP ───────────────────────────────────────── */
+
+        .quarters {
+            display: flex;
+            justify-content: center;
+            padding: 22px 0 4px;
+        }
+
+        .quarters table {
+            border-collapse: collapse;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .quarters th {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #aaaaaa;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            padding: 0 22px 8px;
+            text-align: center;
+        }
+
+        .quarters th.side {
+            text-align: left;
+            padding-left: 0;
+            letter-spacing: 0.1em;
+        }
+
+        .quarters td {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #ffffff;
+            padding: 4px 22px;
+            text-align: center;
+        }
+
+        .quarters td.side {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #aaaaaa;
+            text-align: left;
+            padding-left: 0;
+            padding-right: 32px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .quarters td.total {
+            color: #ff6b00;
+            border-left: 1px solid #333;
+        }
+
+        .quarters th.total { border-left: 1px solid #333; }
+
+        /* ── BOX SCORES ──────────────────────────────────────────── */
+
+        .tables {
+            display: flex;
+            gap: 60px;
+            flex: 1;
+            min-height: 0;
+            padding-top: 18px;
+        }
+
+        .team-table { flex: 1; }
+
+        .table-header {
+            font-size: 1.2rem;
+            color: #aaaaaa;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #333;
+        }
+
+        .table-header span { color: #ff6b00; font-weight: 700; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 1.2rem; }
+
+        thead th {
+            color: #aaaaaa;
+            font-weight: 600;
+            text-align: left;
+            padding: 6px 10px;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        thead th.num { text-align: right; }
+        tbody tr { border-top: 1px solid #1a1a2e; }
+        td { padding: 8px 10px; color: #ffffff; }
+        td.jersey { color: #aaaaaa; width: 48px; font-size: 1rem; }
+        td.name { color: #ffffff; font-weight: 500; }
+        td.name.captain::after { content: " ©"; color: #ff6b00; font-size: 0.85rem; }
+        td.num { text-align: right; font-variant-numeric: tabular-nums; width: 56px; }
+        td.points { color: #ffffff; font-weight: 700; }
+        td.fouls.warning { color: #ff6b00; font-weight: 600; }
+
+        /* ── FOOTER ──────────────────────────────────────────────── */
+
+        .slate-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+
+        .meta-line {
+            font-size: 1.1rem;
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        .meta-sub {
+            font-size: 0.95rem;
+            color: #aaaaaa;
+            margin-top: 4px;
+        }
+
+        .credit { text-align: right; }
+
+        .credit-club {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #ff6b00;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+        }
+
+        .credit-copy {
+            font-size: 0.9rem;
+            color: #777777;
+            margin-top: 4px;
+            letter-spacing: 0.04em;
+        }
+    </style>
+</head>
+<body>
+
+<div id="slate">
+
+    <div class="slate-header">
+        <div style="display:flex; align-items:center;">
+            <div class="pioneer-accent"></div>
+            <div class="match-result">
+                <div class="result-team">
+                    <div class="result-club" id="home-club"></div>
+                    <div class="result-name" id="home-name">—</div>
+                </div>
+                <div>
+                    <div class="result-label" id="score-label">eindstand</div>
+                    <div class="result-score">
+                        <span id="home-score">0</span>
+                        <span style="color:#333; font-weight:300"> — </span>
+                        <span id="away-score">0</span>
+                    </div>
+                </div>
+                <div class="result-team">
+                    <div class="result-club" id="away-club"></div>
+                    <div class="result-name" id="away-name">—</div>
+                </div>
+            </div>
+        </div>
+        <div class="final-badge" id="state-badge">Eindstand</div>
+    </div>
+
+    <div class="quarters" id="quarters"></div>
+
+    <div class="tables">
+        <div class="team-table">
+            <div class="table-header">Thuis — <span id="home-table-name"></span></div>
+            <table>
+                <thead><tr>
+                    <th>#</th><th>Speler</th>
+                    <th class="num">Pts</th><th class="num">3pt</th><th class="num">Ftn</th>
+                </tr></thead>
+                <tbody id="home-tbody"></tbody>
+            </table>
+        </div>
+        <div class="team-table">
+            <div class="table-header">Gasten — <span id="away-table-name"></span></div>
+            <table>
+                <thead><tr>
+                    <th>#</th><th>Speler</th>
+                    <th class="num">Pts</th><th class="num">3pt</th><th class="num">Ftn</th>
+                </tr></thead>
+                <tbody id="away-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="slate-footer">
+        <div>
+            <div class="meta-line" id="meta-line">—</div>
+            <div class="meta-sub" id="meta-sub"></div>
+        </div>
+        <div class="credit">
+            <div class="credit-club" id="credit-club"></div>
+            <div class="credit-copy" id="credit-copy"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Dutch long date from the FOYS "YYYY-MM-DD" field. Parsed by hand
+    // rather than with Date(string) so the browser's timezone cannot shift
+    // the day across a boundary.
+    function dutchDate(iso) {
+        if (!iso || iso.length < 10) return "";
+        const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+        return new Date(y, m - 1, d).toLocaleDateString("nl-NL", {
+            weekday: "long", day: "numeric", month: "long", year: "numeric"
+        });
+    }
+
+    function seasonYear(iso) {
+        return (iso && iso.length >= 4) ? iso.slice(0, 4) : new Date().getFullYear();
+    }
+
+    function buildQuarters(s, homeTotal, awayTotal) {
+        const rows = s.periods || [];
+        const box = document.getElementById("quarters");
+        if (!rows.length) { box.innerHTML = ""; return; }
+
+        const head = rows.map(r => `<th>${r.name}</th>`).join("");
+        const home = rows.map(r => `<td>${r.home}</td>`).join("");
+        const away = rows.map(r => `<td>${r.away}</td>`).join("");
+
+        // Totals are passed in rather than summed from the rows: a goal
+        // without a periodId is dropped from the split but still counts
+        // towards the score, and before Final the score comes from the
+        // Anatec rather than from FOYS.
+        box.innerHTML = `
+            <table>
+                <thead><tr>
+                    <th class="side"></th>${head}<th class="total">Tot</th>
+                </tr></thead>
+                <tbody>
+                    <tr>
+                        <td class="side">${s.home_name || "Thuis"}</td>
+                        ${home}<td class="total">${homeTotal ?? 0}</td>
+                    </tr>
+                    <tr>
+                        <td class="side">${s.away_name || "Gasten"}</td>
+                        ${away}<td class="total">${awayTotal ?? 0}</td>
+                    </tr>
+                </tbody>
+            </table>`;
+    }
+
+    function buildRows(players, tbodyId) {
+        const tbody = document.getElementById(tbodyId);
+        tbody.innerHTML = "";
+        players.sort((a, b) => b.points - a.points);
+        players.forEach(p => {
+            if (p.points === 0 && p.fouls === 0) return;
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="jersey">${p.jersey ?? "—"}</td>
+                <td class="name${p.captain ? " captain" : ""}">${p.name}</td>
+                <td class="num points">${p.points}</td>
+                <td class="num">${p.threes > 0 ? p.threes : "—"}</td>
+                <td class="num fouls${p.fouls >= 4 ? " warning" : ""}">${p.fouls > 0 ? p.fouls : "—"}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function update() {
+        try {
+            const [stateRes, playersRes] = await Promise.all([
+                fetch("/api/state"),
+                fetch("/api/players")
+            ]);
+            const s = await stateRes.json();
+            const players = await playersRes.json();
+
+            const isFinal = s.status === "Final";
+            document.getElementById("state-badge").textContent =
+                isFinal ? "Eindstand" : "Stand";
+            document.getElementById("score-label").textContent =
+                isFinal ? "eindstand" : "stand";
+
+            // Score source, as everywhere else in this project (see Data
+            // Priority in docs/foys-api.md): the Anatec is leading while the
+            // match runs, because it is what the hall sees and FOYS lags by
+            // the time the DWF operator needs. Once the match is closed FOYS
+            // is the official record and leads.
+            const homeScore = (isFinal || !s.anatec_connected)
+                ? s.home_score : s.anatec_home_score;
+            const awayScore = (isFinal || !s.anatec_connected)
+                ? s.away_score : s.anatec_guest_score;
+
+            document.getElementById("home-name").textContent = s.home_name || "—";
+            document.getElementById("away-name").textContent = s.away_name || "—";
+            document.getElementById("home-club").textContent = s.home_club || "";
+            document.getElementById("away-club").textContent = s.away_club || "";
+            document.getElementById("home-score").textContent = homeScore ?? 0;
+            document.getElementById("away-score").textContent = awayScore ?? 0;
+            document.getElementById("home-table-name").textContent = s.home_name || "";
+            document.getElementById("away-table-name").textContent = s.away_name || "";
+
+            buildQuarters(s, homeScore, awayScore);
+            buildRows(Array.isArray(players) ? players.filter(p => p.team === "home") : [], "home-tbody");
+            buildRows(Array.isArray(players) ? players.filter(p => p.team === "away") : [], "away-tbody");
+
+            // Footer
+            const where = [s.match_location, s.match_court].filter(Boolean).join(", ");
+            const when  = [dutchDate(s.match_date), s.match_time].filter(Boolean).join(" · ");
+            document.getElementById("meta-line").textContent =
+                [when, where].filter(Boolean).join(" · ") || "—";
+
+            const club = s.home_club || "";
+            document.getElementById("meta-sub").textContent =
+                club ? `Live uitgezonden door ${club}` : "";
+            document.getElementById("credit-club").textContent = club;
+            document.getElementById("credit-copy").textContent =
+                club ? `© ${seasonYear(s.match_date)} ${club}` : "";
+
+        } catch (e) {
+            console.error("Slate fetch error:", e);
+        }
+    }
+
+    update();
+    setInterval(update, 3000);
+</script>
+
+</body>
+</html>

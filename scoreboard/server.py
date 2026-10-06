@@ -62,6 +62,8 @@ Routes
     /overlay/box        corner box
     /overlay/stats      end-of-period player stats
     /overlay/final      final score
+    /overlay/slate      full-frame closing slate (own scene, replaces the
+                        camera): score, quarters, box scores, match details
     /overlay/anatec     Anatec-only overlay
     /overlay/foys       FOYS-only overlay
 
@@ -132,6 +134,47 @@ def calculate_fouls(offenses, team_id, period_id):
     ])
 
 
+# Period ids as documented in docs/foys-api.md: 14..17 = Q1..Q4, 18+ = overtime.
+# The mapping and the per-period attribution were checked against the official
+# NBB match form with probes/probe_periods.py before this function was written.
+PERIOD_NAMES = {14: "Q1", 15: "Q2", 16: "Q3", 17: "Q4"}
+
+
+def period_name(period_id):
+    if period_id in PERIOD_NAMES:
+        return PERIOD_NAMES[period_id]
+    return f"OT{period_id - 17}" if period_id >= 18 else f"P{period_id}"
+
+
+def calculate_period_scores(goals, home_id, away_id):
+    """Per-period score, grouped out of the goals list the poller already
+    holds: every row carries teamId, points and periodId, and /goals is a
+    plain uncapped list. No extra request.
+
+    Returns a list ordered by period, newest period last:
+        [{"period": 14, "name": "Q1", "home": 20, "away": 18}, ...]
+
+    A goal with no periodId cannot be attributed and is dropped, so the rows
+    can sum to less than calculate_score(). None were seen in the matches
+    probed; the overlay should still show the full score from
+    home_score/away_score rather than adding these up."""
+    totals = {}
+    for g in goals:
+        period_id = g.get("periodId")
+        if period_id is None:
+            continue
+        if g.get("teamId") == home_id:
+            side = "home"
+        elif g.get("teamId") == away_id:
+            side = "away"
+        else:
+            continue
+        row = totals.setdefault(period_id, {"home": 0, "away": 0})
+        row[side] += g.get("points") or 0
+    return [{"period": pid, "name": period_name(pid), **totals[pid]}
+            for pid in sorted(totals)]
+
+
 def current_period(goals, offenses):
     """Highest periodId across all events. Period ids are monotonic
     (14..17 = Q1..Q4, 18+ = OT), so max() is the current period without
@@ -156,9 +199,80 @@ def max_event_period(*event_lists):
 seen_offense_ids = set()
 
 
-def poll():
+def refresh_from_foys(match_id, home_id, away_id, announce_fouls=True):
+    """One pass over goals, offenses and timeouts, writing match_state.
+
+    Called every 3 s while the match runs, once when a match is selected, and
+    once more on the transition into Final. announce_fouls=False seeds
+    seen_offense_ids without firing the foul popup, which is what the two
+    one-off calls want: on selection every existing foul would otherwise look
+    new, and after the final buzzer a popup is out of place."""
     global seen_offense_ids
+
+    goals    = client.get_goals(match_id)
+    offenses = client.get_offenses(match_id)
+    timeouts = client.get_timeouts(match_id)
+    period   = current_period(goals, offenses)
+    match_state["foys_event_period"] = max_event_period(goals, offenses, timeouts)
+    match_state["foys_last_ok_ts"]  = time.time()
+    match_state["foys_error_count"] = 0
+
+    match_state["home_score"] = calculate_score(goals, home_id)
+    match_state["away_score"] = calculate_score(goals, away_id)
+    match_state["period"]     = period
+    match_state["periods"]    = calculate_period_scores(goals, home_id, away_id)
+
+    if period:
+        home_fouls = calculate_fouls(offenses, home_id, period)
+        away_fouls = calculate_fouls(offenses, away_id, period)
+        match_state["home_fouls"] = home_fouls
+        match_state["away_fouls"] = away_fouls
+        match_state["home_bonus"] = home_fouls >= 4
+        match_state["away_bonus"] = away_fouls >= 4
+        match_state["home_timeouts"] = len([
+            t for t in timeouts
+            if t["isHomeTeam"] and t["periodId"] == period
+        ])
+        match_state["away_timeouts"] = len([
+            t for t in timeouts
+            if not t["isHomeTeam"] and t["periodId"] == period
+        ])
+
+    new_fouls = [
+        f for f in offenses
+        if f["id"] not in seen_offense_ids
+        and f["matchPlayer"]["matchRole"]["type"] == "Player"
+    ]
+    if new_fouls and announce_fouls:
+        f = new_fouls[-1]
+        match_state["last_foul"] = {
+            "player": f["matchPlayer"]["person"]["fullName"],
+            "jersey": f["matchPlayer"]["teamNumber"],
+            "code":   f["offenseType"]["code"],
+            "team":   "home" if f["matchPlayer"]["teamId"] == home_id else "away",
+        }
+    seen_offense_ids = {f["id"] for f in offenses}
+
+    player_stats = {}
+    for g in goals:
+        pid = g["matchPlayerId"]
+        if pid not in player_stats:
+            player_stats[pid] = {"points": 0, "threes": 0, "fouls": 0}
+        player_stats[pid]["points"] += g["points"]
+        if g["points"] == 3:
+            player_stats[pid]["threes"] += 1
+    for f in offenses:
+        if f["matchPlayer"]["matchRole"]["type"] == "Player":
+            pid = f["matchPlayerId"]
+            if pid not in player_stats:
+                player_stats[pid] = {"points": 0, "threes": 0, "fouls": 0}
+            player_stats[pid]["fouls"] += 1
+    match_state["player_stats"] = player_stats
+
+
+def poll():
     tick = 0
+    final_refreshed_for = None   # match id whose closing refresh is done
     while True:
         try:
             if match_state["selected"]:
@@ -178,66 +292,16 @@ def poll():
                     except Exception:
                         match_state["foys_error_count"] = match_state.get("foys_error_count", 0) + 1
 
-                # only when not Final
                 if match_state["status"] != "Final":
-                    goals    = client.get_goals(match_id)
-                    offenses = client.get_offenses(match_id)
-                    timeouts = client.get_timeouts(match_id)
-                    period   = current_period(goals, offenses)
-                    match_state["foys_event_period"] = max_event_period(goals, offenses, timeouts)
-                    match_state["foys_last_ok_ts"]  = time.time()
-                    match_state["foys_error_count"] = 0
-
-                    match_state["home_score"] = calculate_score(goals, home_id)
-                    match_state["away_score"] = calculate_score(goals, away_id)
-                    match_state["period"]     = period
-
-                    if period:
-                        home_fouls = calculate_fouls(offenses, home_id, period)
-                        away_fouls = calculate_fouls(offenses, away_id, period)
-                        match_state["home_fouls"] = home_fouls
-                        match_state["away_fouls"] = away_fouls
-                        match_state["home_bonus"] = home_fouls >= 4
-                        match_state["away_bonus"] = away_fouls >= 4
-                        match_state["home_timeouts"] = len([
-                            t for t in timeouts
-                            if t["isHomeTeam"] and t["periodId"] == period
-                        ])
-                        match_state["away_timeouts"] = len([
-                            t for t in timeouts
-                            if not t["isHomeTeam"] and t["periodId"] == period
-                        ])
-
-                    new_fouls = [
-                        f for f in offenses
-                        if f["id"] not in seen_offense_ids
-                        and f["matchPlayer"]["matchRole"]["type"] == "Player"
-                    ]
-                    if new_fouls:
-                        f = new_fouls[-1]
-                        match_state["last_foul"] = {
-                            "player": f["matchPlayer"]["person"]["fullName"],
-                            "jersey": f["matchPlayer"]["teamNumber"],
-                            "code":   f["offenseType"]["code"],
-                            "team":   "home" if f["matchPlayer"]["teamId"] == home_id else "away",
-                        }
-                    seen_offense_ids = {f["id"] for f in offenses}
-
-                    player_stats = {}
-                    for g in goals:
-                        pid = g["matchPlayerId"]
-                        if pid not in player_stats:
-                            player_stats[pid] = {"points": 0, "threes": 0, "fouls": 0}
-                        player_stats[pid]["points"] += g["points"]
-                        if g["points"] == 3:
-                            player_stats[pid]["threes"] += 1
-                    for f in offenses:
-                        if f["matchPlayer"]["matchRole"]["type"] == "Player":
-                            pid = f["matchPlayerId"]
-                            if pid not in player_stats:
-                                player_stats[pid] = {"points": 0, "threes": 0, "fouls": 0}
-                            player_stats[pid]["fouls"] += 1
-                    match_state["player_stats"] = player_stats
+                    refresh_from_foys(match_id, home_id, away_id)
+                    final_refreshed_for = None
+                elif final_refreshed_for != match_id:
+                    # The status check runs every third tick, so up to 9 s of
+                    # entries can land between the last refresh and seeing
+                    # Final. Fetch once more, then stop polling this match.
+                    refresh_from_foys(match_id, home_id, away_id, announce_fouls=False)
+                    final_refreshed_for = match_id
+                    print(f"[FOYS] match {match_id} is Final; closing refresh done")
 
         except Exception as e:
             match_state["foys_error_count"] = match_state.get("foys_error_count", 0) + 1
@@ -299,7 +363,18 @@ def select_match(match_id):
         "match_time":       match["startTime"][:5],
         "match_location":   match["accommodationName"],
         "match_court":      match["fieldName"],
+        "periods":          [],
     })
+
+    # Fetch once right away, whatever the status. The poller skips a match
+    # that is already Final, which used to leave the box score and the
+    # quarter scores empty after a restart or a late selection.
+    try:
+        refresh_from_foys(match_id, match["homeTeamId"], match["awayTeamId"],
+                          announce_fouls=False)
+    except Exception as e:
+        print(f"[FOYS] initial refresh failed for match {match_id}: {e}")
+
     return render_template("select.html", matches=matches, foys_error=foys_error,
                            selected=match_id, message=f"Selected: {match['homeTeamName']} vs {match['awayTeamName']}")
 
@@ -450,6 +525,13 @@ def overlay_foys():
 @app.route("/overlay/final")
 def overlay_final():
     response = make_response(render_template("overlay_final.html"))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+@app.route("/overlay/slate")
+def overlay_slate():
+    response = make_response(render_template("overlay_slate.html"))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     return response

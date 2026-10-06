@@ -16,6 +16,12 @@
         "home_timeouts": 2,
         "away_timeouts": 1,
         "period": 17,
+        "periods": [
+            {"period": 14, "name": "Q1", "home": 20, "away": 18},
+            {"period": 15, "name": "Q2", "home": 18, "away": 15},
+            {"period": 16, "name": "Q3", "home": 22, "away": 19},
+            {"period": 17, "name": "Q4", "home": 18, "away": 19}
+        ],
         "home_logo": "",
         "away_logo": "",
         "match_date": "2026-04-27",
