@@ -281,13 +281,30 @@ def _auto_serial(baud: int = 2400):
 
 
 def _read_simulate():
-    """Feed frames from simulator."""
-    from simulator import game_sequence, make_frame
+    """Feed frames from simulator.
+
+    With --mock there is no FOYS to finalise the match, so the simulator's
+    FINAL_LABEL stands in for it: the status turns Final there and back to
+    InProgress when the next pass starts. Only a Final set here is undone,
+    so --finalised holds until the first pass ends; from then on the
+    simulator drives the status. With live FOYS the status is left alone.
+    """
+    from simulator import game_sequence, FINAL_LABEL
     print("Anatec reader running in SIMULATE mode.")
     match_state["anatec_connected"] = True
+    finalised_by_sim = False
 
     while True:
+        first = True
         for frame, label, pause in game_sequence():
+            if match_state.get("foys_mode") == "mock":
+                if first and finalised_by_sim:
+                    match_state["status"] = "InProgress"
+                    finalised_by_sim = False
+                elif label == FINAL_LABEL and not finalised_by_sim:
+                    match_state["status"] = "Final"
+                    finalised_by_sim = True
+            first = False
             parsed = parse(frame)
             if parsed:
                 _update_state(parsed)

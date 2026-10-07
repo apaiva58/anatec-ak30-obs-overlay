@@ -66,7 +66,7 @@ source alone also works. `docs/foys-api.md` has the priority rules.
 
 Then open http://localhost:5001/status (the operator card) and
 http://localhost:5001/overlay/wide (the bottom bar). The simulator plays a
-scripted period with mock rosters; `--no-obs` logs scene decisions without
+scripted four-quarter match with mock rosters; `--no-obs` logs scene decisions without
 touching OBS. Run the tests with `python3 tests/test_scene_logic.py`.
 
 Python 3.9 or newer. The stock `python3` on macOS (3.9.6) is enough; it prints

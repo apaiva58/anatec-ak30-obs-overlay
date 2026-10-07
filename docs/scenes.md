@@ -53,14 +53,24 @@ try to switch to it.
 ## Watching it at the desk
 
 ```
-OBS_STATS_AFTER_PERIODS=1 python3 scoreboard/server.py --anatec simulate --mock --no-obs
+python3 scoreboard/server.py --anatec simulate --mock --no-obs
 ```
 
 `--no-obs` is a dry run: decisions are logged (`[Scenes]`, `[OBS] ... (dry run)`)
-and shown on the dock, OBS is not contacted. The simulator plays period 1 only,
-hence `OBS_STATS_AFTER_PERIODS=1`; it ends the period like the real console
-does. About 20 s in: the prompt, 2 s later the halftime scene, and when the
-next pass starts scoring, the court again.
+and shown on the dock, OBS is not contacted. The simulator plays four short
+quarters (about 2.8 minutes a pass) and ends each one like the real console
+does. Per pass: at about 55 s the end of Q2, the prompt, 2 s later the
+halftime scene at 38-33; a 30 s halftime; the court again on the first basket of Q3
+(about 87 s); the "wacht op afsluiten" prompt at the end of Q4 (about
+141 s); 5 s later the mock match turns Final and the final scene goes on
+air for 25 s at 78-71, the mock match's final score. Each pass starts again at period 1 and InProgress, which
+counts as a new game. Nothing switches back to the court at that point:
+the server never puts the first scene on air, so OBS stays on the final
+scene until the next halftime.
+
+Drop `--no-obs` to watch OBS itself switch; with it, the Scène row reads
+"Uit" and only the prompts and the `[OBS] ... (dry run)` log lines show
+the decisions.
 
 ## Known limits
 

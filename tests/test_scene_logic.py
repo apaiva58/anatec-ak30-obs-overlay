@@ -449,6 +449,14 @@ class FakeObs:
             raise RuntimeError("refused")
         self.scene = name
 
+    def stream_status(self):
+        self._need()
+        return {"active": False, "reconnecting": False, "timecode": None, "skipped": 0}
+
+    def record_status(self):
+        self._need()
+        return {"active": False, "paused": False, "timecode": None, "bytes": 0}
+
 
 def new_state():
     return {"selected": False, "match_id": None, "status": "Planned",
@@ -567,26 +575,39 @@ def test_dry_run_shows_decisions_without_touching_obs():
     assert b.log_has("(dry run)") and obs.current_scene() == STATS_SCENE
 
 
-def test_simulator_period_end_drives_the_whole_flow():
+def test_simulated_match_drives_the_whole_flow():
     from parser import parse
-    from simulator import game_sequence
+    from simulator import game_sequence, FINAL_LABEL
 
-    d = SceneDirector(SCENES, stats_after={1}, stats_delay=DELAY)
+    # Default stats_after: only halftime. Two passes of the four-quarter
+    # match; the second starts at period 1 again, which the director treats
+    # as a new game, so the whole flow must repeat. The status follows the
+    # simulator as reader.py does in mock mode: Final at FINAL_LABEL, back to
+    # InProgress when the next pass starts.
+    final = "Final Slate"
+    d = SceneDirector(dict(SCENES, final=final), stats_delay=DELAY)
     timeline, now = [], 0.0
-    for _ in range(2):                             # two passes of the simulated period
-        for frame, _, pause in game_sequence():
+    for _ in range(2):
+        first = True
+        for frame, label, pause in game_sequence():
             p = parse(frame)
-            timeline.append((now, p))
+            if first:
+                status = "InProgress"
+            elif label == FINAL_LABEL:
+                status = "Final"
+            first = False
+            timeline.append((now, p, status))
             now += pause
 
     on_air, switches, i, cur, t = COURT, [], 0, None, 0.0
     while t <= now + 5:
         while i < len(timeline) and timeline[i][0] <= t:
-            cur = timeline[i][1]
+            cur, status = timeline[i][1], timeline[i][2]
             i += 1
         if cur is not None:
             snap = Snapshot(
-                now=t, period=cur["period"], minutes=cur["clock_min"],
+                now=t, match_id=1, status=status,
+                period=cur["period"], minutes=cur["clock_min"],
                 seconds=cur["clock_sec"], tenths=cur["clock_tenths"],
                 counters=(cur["home_score"], cur["guest_score"], cur["home_fouls"],
                           cur["away_fouls"], cur["home_timeouts"], cur["guest_timeouts"]),
@@ -596,7 +617,30 @@ def test_simulator_period_end_drives_the_whole_flow():
                 switches.append(a.scene)
                 on_air = a.scene
         t += DT
-    assert switches == [STATS_SCENE, COURT], switches
+    assert switches == [STATS_SCENE, COURT, final] * 2, switches
+
+
+def test_simulator_quarters_match_the_mock_match():
+    import json
+    from parser import parse
+    from simulator import game_sequence, QUARTERS
+
+    with open(os.path.join(HERE, "..", "mock_data.json")) as f:
+        mock = json.load(f)["match"]
+    assert [(p["home"], p["away"]) for p in mock["periods"]] == QUARTERS
+
+    ends, last = {}, None
+    for frame, label, _ in game_sequence():
+        p = parse(frame)
+        if label.endswith("end of period"):
+            ends[p["period"]] = (p["home_score"], p["guest_score"])
+        last = p
+    running, expected = (0, 0), {}
+    for q, (h, g) in enumerate(QUARTERS, start=1):
+        running = (running[0] + h, running[1] + g)
+        expected[q] = running
+    assert ends == expected, ends
+    assert (last["home_score"], last["guest_score"]) == (mock["home_score"], mock["away_score"])
 
 
 if __name__ == "__main__":

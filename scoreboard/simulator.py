@@ -4,16 +4,17 @@ simulator.py
 Simulates Anatec AK30 serial output for testing the parser
 and overlay without a physical scoreboard.
 
-Generates a sequence of frames representing a game scenario:
-  - Clock counts down
-  - Home scores 2+2
-  - Guest scores 2+2
-  - Home scores 3
-  - Free throw made
-  - Timeout home
-  - Fouls up to bonus
-  - Multi-digit scores (10, 20, 99, 100, 119)
-  - Sub-second clock
+Generates a whole match of four short quarters (2:00 each on the console,
+about 20 s of wall time per quarter):
+  - each quarter: baskets while the clock runs, a foul and free throw with
+    the clock stopped, a timeout, a sub-second countdown, the buzzer
+  - quarter scores follow QUARTERS, which mirrors mock_data.json
+  - scores carry over; team fouls reset each quarter, timeouts at halftime
+  - a short break between Q1-Q2 and Q3-Q4, a 30 s halftime after Q2
+  - after Q4, a few seconds of "desk finalising", then FINAL_LABEL; in mock
+    mode the reader turns the match Final there, so the final scene shows
+  - one pass takes about 2.8 minutes; the reader loops it, and each loop
+    returns from period 4 to 1, which scene control treats as a new game
 
 Byte positions (confirmed 2026-04-23):
   16+17+18  home score (hundreds, tens, units)
@@ -43,6 +44,24 @@ from parser import parse, format_clock
 # 22 bytes on the wire per frame). A stopped clock is still a stream of
 # identical frames, not silence — hold() below reproduces that.
 FRAME_PERIOD = 0.09
+
+# Breaks, in wall-clock seconds. Real breaks are minutes long; these are
+# shortened for testing. Scene control ignores console counters for 30 s
+# after a buzzer, so with HALFTIME_S = 30 the return to the court comes on
+# the first basket of Q3, about 5 s after that window closes.
+BREAK_S = 5
+HALFTIME_S = 30
+DESK_S = 5           # Q4 buzzer to "Final" in FOYS; minutes in a real match
+FINAL_HOLD_S = 25    # time to look at the final scene before the next pass
+
+# The reader matches this label to turn a mock match Final (reader.py).
+FINAL_LABEL = "Match final"
+
+# Points per quarter (home, guest). These are the quarters in
+# mock_data.json, so with --mock the console ends where mock FOYS says the
+# match ended (78-71) and the final slate agrees with the bar.
+# tests/test_scene_logic.py checks the two stay equal.
+QUARTERS = [(20, 18), (18, 15), (22, 19), (18, 19)]
 
 
 def make_frame(
@@ -133,11 +152,11 @@ def make_frame(
 
 def game_sequence():
     """
-    Yields (frame, label, pause_seconds) tuples simulating a 2-minute game sequence.
+    Yields (frame, label, pause_seconds) tuples simulating a whole match.
 
-    Score progression: 2-0, 2-2, 2-5, 4-5, foul away, 5-5, 5-8, 5-10, 7-10, 9-10
-    Clock runs continuously through scoring events — stops only on fouls,
-    timeouts and free throws, as in a real game.
+    Per quarter the points in QUARTERS, as baskets while the clock runs,
+    plus an away foul with a home free throw and a home timeout, both with
+    the clock stopped, as in a real game.
     """
     s = dict(
         home_score=0, guest_score=0,
@@ -165,91 +184,102 @@ def game_sequence():
         for _ in range(max(1, round(seconds / FRAME_PERIOD))):
             yield frame, label, FRAME_PERIOD
 
-    def clock_run(from_min, from_sec, to_min, to_sec, step_pause=0.08):
-        total_from = from_min * 60 + from_sec
-        total_to   = to_min * 60 + to_sec
-        for total in range(total_from, total_to - 1, -1):
-            m = total // 60
-            sec = total % 60
-            yield state(f"Clock {m}:{sec:02d}", pause=step_pause,
-                        clock_min=m, clock_sec=sec, clock_tenths=None, clock_running=True)
+    def quarter(q, home_pts, guest_pts):
+        """One quarter in which home scores home_pts and guest guest_pts.
 
-    # Baseline
-    yield from hold("Baseline", 1, clock_running=False, clock_min=2, clock_sec=0)
+        Home gets one free throw (after the foul at 0:55); everything else
+        is split into baskets of 2, plus one 3 when the remainder is odd.
+        The baskets alternate home and guest and are spread evenly over the
+        running clock, away from the stops at 0:55 and 0:25 and the last
+        five seconds.
+        """
+        def baskets(points):
+            out = []
+            if points % 2:
+                out.append(3)
+                points -= 3
+            return out + [2] * (points // 2)
 
-    # Clock starts — 2:00 to 1:45, home scores 2 while clock runs
-    yield state("Clock starts", clock_running=True)
-    yield from clock_run(2, 0, 1, 46)
-    yield state("Home +2 (2:0)", home_score=2, clock_min=1, clock_sec=45, pause=0.08)
-    yield from clock_run(1, 45, 1, 31)
+        home, guest = baskets(home_pts - 1), baskets(guest_pts)
+        events = []
+        for i in range(max(len(home), len(guest))):
+            if i < len(home):
+                events.append(("home", home[i]))
+            if i < len(guest):
+                events.append(("guest", guest[i]))
+        pool = [t for t in range(119, 5, -1) if t not in (55, 25)]
+        event_at = {pool[int((k + 0.5) * len(pool) / len(events))]: ev
+                    for k, ev in enumerate(events)}
 
-    # Guest scores 2 while clock runs — 2:2
-    yield state("Guest +2 (2:2)", guest_score=2, clock_min=1, clock_sec=30, pause=0.08)
-    yield from clock_run(1, 30, 1, 16)
+        def tally():
+            return f"{s['home_score']}:{s['guest_score']}"
 
-    # Guest scores 3 while clock runs — 2:5
-    yield state("Guest +3 (2:5)", guest_score=5, clock_min=1, clock_sec=15, pause=0.08)
-    yield from clock_run(1, 15, 1, 6)
+        # Console set for the new quarter: period on, clock at 2:00, team
+        # fouls back to zero.
+        yield from hold(f"Q{q} ready", 1, period=q, clock_running=False,
+                        clock_min=2, clock_sec=0, clock_tenths=None,
+                        home_fouls=0, away_fouls=0,
+                        timeout_active=None, service_dot=False)
+        yield state(f"Q{q} clock starts", clock_running=True)
 
-    # Home scores 2 while clock runs — 4:5
-    yield state("Home +2 (4:5)", home_score=4, clock_min=1, clock_sec=5, pause=0.08)
-    yield from clock_run(1, 5, 0, 56)
+        # Whole seconds from 1:59 down to 0:05. Baskets land while the clock
+        # runs; the clock stops only for the foul and the timeout.
+        for total in range(119, 4, -1):
+            m, sec = divmod(total, 60)
+            label = f"Clock {m}:{sec:02d}"
+            if total in event_at:
+                team, pts = event_at[total]
+                key = "home_score" if team == "home" else "guest_score"
+                s[key] += pts
+                label = f"Q{q} {team} +{pts} ({tally()})"
+            yield state(label, pause=0.08, clock_min=m, clock_sec=sec,
+                        clock_tenths=None, clock_running=True)
 
-    # Away foul — clock stops
-    yield from hold("Away foul (1)", 1.5, clock_running=False,
-                    clock_min=0, clock_sec=55, away_fouls=1)
+            if total == 55:
+                # Away foul, home free throw: clock stopped
+                yield from hold(f"Q{q} away foul", 1.5, clock_running=False,
+                                away_fouls=s["away_fouls"] + 1)
+                s["home_score"] += 1
+                yield from hold(f"Q{q} home free throw ({tally()})", 1.5)
+                yield state(f"Q{q} clock resumes", clock_running=True)
 
-    # Free throw — clock stopped
-    yield from hold("Home free throw (5:5)", 1.5, home_score=5)
+            if total == 25:
+                # Home timeout: clock stopped
+                yield from hold(f"Q{q} home timeout", 3, clock_running=False,
+                                timeout_active="home",
+                                home_timeouts=s["home_timeouts"] + 1)
+                yield from hold(f"Q{q} timeout ends", 0.5, timeout_active=None)
+                yield state(f"Q{q} clock resumes", clock_running=True)
 
-    # Clock resumes — 0:55 to 0:36
-    yield state("Clock resumes", clock_running=True)
-    yield from clock_run(0, 55, 0, 36)
+        # Sub-second countdown. Ends the way the real console does (capture
+        # 2026-04-23): the last tenths frame is 0:00.1, then the display drops
+        # to plain 0:00 in minute mode. It never shows 0:00.0 at the buzzer.
+        for sec in range(4, -1, -1):
+            for tenth in range(9, -1, -1):
+                if sec == 0 and tenth == 0:
+                    break
+                yield state(f"Q{q} clock 0:{sec:02d}.{tenth}",
+                            clock_sec=sec, clock_tenths=tenth,
+                            clock_running=False, pause=0.08)
 
-    # Guest scores 3 while clock runs — 5:8
-    yield state("Guest +3 (5:8)", guest_score=8, clock_min=0, clock_sec=35, pause=0.08)
-    yield from clock_run(0, 35, 0, 26)
+        # Buzzer: minute mode (tenths absent), buzzer flag on
+        yield from hold(f"Q{q} buzzer", 2, clock_sec=0, clock_tenths=None,
+                        service_dot=True)
+        yield from hold(f"Q{q} end of period", 1, service_dot=False,
+                        clock_running=False)
 
-    # Guest scores 2 while clock runs — 5:10
-    yield state("Guest +2 (5:10)", guest_score=10, clock_min=0, clock_sec=25, pause=0.08)
-
-    # Home timeout — clock stops
-    yield from hold("Home timeout", 3, clock_running=False,
-                    clock_min=0, clock_sec=25,
-                    timeout_active="home", home_timeouts=1)
-    yield from hold("Timeout ends", 0.5, timeout_active=None)
-
-    # Clock resumes — 0:25 to 0:16
-    yield state("Clock resumes", clock_running=True)
-    yield from clock_run(0, 25, 0, 16)
-
-    # Home scores 2 while clock runs — 7:10
-    yield state("Home +2 (7:10)", home_score=7, clock_min=0, clock_sec=15, pause=0.08)
-    yield from clock_run(0, 15, 0, 6)
-
-    # Home scores 2 while clock runs — 9:10
-    yield state("Home +2 (9:10)", home_score=9, clock_min=0, clock_sec=5, pause=0.08)
-    yield from clock_run(0, 5, 0, 1)
-
-    # Sub-second countdown. Ends the way the real console does (capture
-    # 2026-04-23): the last tenths frame is 0:00.1, then the display drops to
-    # plain 0:00 in minute mode. It never shows 0:00.0 at the buzzer.
-    for sec in range(4, -1, -1):
-        for tenth in range(9, -1, -1):
-            if sec == 0 and tenth == 0:
-                break
-            yield state(f"Clock 0:{sec:02d}.{tenth}",
-                       clock_sec=sec, clock_tenths=tenth,
-                       clock_running=False, pause=0.08)
-
-    # Buzzer: minute mode (tenths absent), buzzer flag on
-    yield from hold("Buzzer", 2, clock_sec=0, clock_tenths=None,
-                    service_dot=True)
-    yield from hold("End of period", 1, service_dot=False,
-                    clock_running=False)
-    # Hold at 0:00 for 30 seconds — gives OBS scene switcher time to detect
-    yield from hold("Hold 0:00", 30, clock_sec=0, clock_tenths=None,
-                    service_dot=False, clock_running=False)
+    # The match. Breaks hold the console at 0:00 of the quarter just ended;
+    # the period number only moves when the next quarter is set up.
+    (q1, q2, q3, q4) = QUARTERS
+    yield from quarter(1, *q1)
+    yield from hold("Break Q1-Q2", BREAK_S)
+    yield from quarter(2, *q2)
+    yield from hold("Halftime", HALFTIME_S, home_timeouts=0, guest_timeouts=0)
+    yield from quarter(3, *q3)
+    yield from hold("Break Q3-Q4", BREAK_S)
+    yield from quarter(4, *q4)
+    yield from hold("Desk finalising", DESK_S)
+    yield from hold(FINAL_LABEL, FINAL_HOLD_S)
 
 
 def run():
