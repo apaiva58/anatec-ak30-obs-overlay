@@ -6,12 +6,15 @@ Glue between match_state, the SceneDirector (scene_logic.py) and OBS.
 - keeps ONE persistent obs-websocket connection and reconnects if it drops
 - reads which scene is really on air once a second, so a switch made by
   hand in OBS is seen and respected
+- reads stream and recording status every two seconds, read-only: the
+  server never starts or stops either
 - checks at connect (and every few seconds after) that the configured
   scenes exist in OBS, and reports the ones that do not
 - a switch OBS refuses is retried, so a closed OBS or a wrong password
   cannot leave the wrong scene on air for good
-- publishes obs_enabled, obs_available, obs_scene, obs_missing_scenes and
-  scene_prompt into match_state for the status dock
+- publishes obs_enabled, obs_available, obs_scene, obs_missing_scenes,
+  obs_stream_* / obs_record_* and scene_prompt into match_state for the
+  status dock
 
 All OBS calls happen on the one controller thread, so no locking is needed.
 `step(now)` does one pass without sleeping; `run()` loops it. Tests drive
@@ -73,6 +76,27 @@ class ObsClient:
     def switch(self, name):
         self._cl.set_current_program_scene(name)
 
+    def stream_status(self):
+        r = self._cl.get_stream_status()
+        return {
+            "active":       getattr(r, "output_active", False),
+            "reconnecting": getattr(r, "output_reconnecting", False),
+            "timecode":     getattr(r, "output_timecode", None),
+            # cumulative since the stream started; the controller keeps the delta
+            "skipped":      getattr(r, "output_skipped_frames", 0) or 0,
+        }
+
+    def record_status(self):
+        r = self._cl.get_record_status()
+        return {
+            "active":   getattr(r, "output_active", False),
+            # always False with the stream encoder (OBS disables pause there);
+            # published anyway so a later encoder change needs no code change
+            "paused":   getattr(r, "output_paused", False),
+            "timecode": getattr(r, "output_timecode", None),
+            "bytes":    getattr(r, "output_bytes", 0) or 0,
+        }
+
 
 class DryObs:
     """Stands in for OBS under --no-obs: no connection, switches are only
@@ -100,9 +124,16 @@ class DryObs:
     def switch(self, name):
         self._scene = name
 
+    def stream_status(self):
+        return {"active": False, "reconnecting": False, "timecode": None, "skipped": 0}
+
+    def record_status(self):
+        return {"active": False, "paused": False, "timecode": None, "bytes": 0}
+
 
 class SceneController:
     POLL_S = 1.0         # how often the real on-air scene is read
+    OUTPUT_POLL_S = 2.0  # how often stream and recording status are read
     RECONNECT_S = 5.0    # wait between connection attempts
     VALIDATE_S = 10.0    # how often the configured scenes are re-checked
     RETRY_S = 5.0        # wait before asking OBS again after a refused switch
@@ -119,11 +150,16 @@ class SceneController:
         self.live = live              # False under --no-obs: dry run
         self.log = log
         self.on_air = None
+        self.stream = None
+        self.record = None
+        self._prev_skipped = None
+        self._skipped_delta = 0
         self._wanted = None
         self._missing = []
         self._down_logged = False
         self._next_connect = 0.0
         self._next_poll = 0.0
+        self._next_output = 0.0
         self._next_validate = 0.0
         self._retry_at = 0.0
 
@@ -134,6 +170,10 @@ class SceneController:
             self.log(f"[OBS] connection lost: {why}")
         self.obs.drop()
         self.on_air = None
+        self.stream = None
+        self.record = None
+        self._prev_skipped = None
+        self._skipped_delta = 0
         self._next_connect = now + self.RECONNECT_S
 
     def _validate(self, now):
@@ -161,6 +201,7 @@ class SceneController:
                 self.log("[OBS] connected" if self.live else "[Scenes] dry run: OBS is not contacted")
                 self._down_logged = False
                 self._next_poll = now
+                self._next_output = now
                 self._validate(now)
             else:
                 if not self._down_logged:
@@ -174,6 +215,23 @@ class SceneController:
                 self.on_air = self.obs.current_scene()
             except Exception as e:
                 self._drop(now, e)
+
+        if self.obs.connected and now >= self._next_output:
+            self._next_output = now + self.OUTPUT_POLL_S
+            try:
+                self.stream = self.obs.stream_status()
+                self.record = self.obs.record_status()
+            except Exception as e:
+                self._drop(now, e)
+            else:
+                # The cumulative count only says something went wrong at some
+                # point; the delta says it is going wrong now.
+                skipped = self.stream["skipped"]
+                if self._prev_skipped is None or skipped < self._prev_skipped:
+                    self._skipped_delta = 0          # new stream, counter reset
+                else:
+                    self._skipped_delta = skipped - self._prev_skipped
+                self._prev_skipped = skipped
 
         if self.obs.connected and now >= self._next_validate:
             self._validate(now)
@@ -225,6 +283,15 @@ class SceneController:
         st["obs_available"] = bool(self.live and self.obs.connected)
         st["obs_scene"] = self.on_air
         st["obs_missing_scenes"] = list(self._missing)
+        s, r = self.stream or {}, self.record or {}
+        st["obs_stream_active"] = bool(s.get("active"))
+        st["obs_stream_reconnecting"] = bool(s.get("reconnecting"))
+        st["obs_stream_skipped_delta"] = self._skipped_delta
+        st["obs_stream_timecode"] = s.get("timecode")
+        st["obs_record_active"] = bool(r.get("active"))
+        st["obs_record_paused"] = bool(r.get("paused"))
+        st["obs_record_timecode"] = r.get("timecode")
+        st["obs_record_bytes"] = r.get("bytes") or 0
         st["scene_prompt"] = self.director.prompt
 
     # -- loop ------------------------------------------------------------

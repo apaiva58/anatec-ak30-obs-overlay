@@ -45,9 +45,17 @@ recovers by itself when it comes back; no need to refresh it.
 ### Status dock
 
 Docks > Custom Browser Docks, URL `http://localhost:5001/status`. It shows
-serial link, FOYS state, selected match, the scene OBS has on air, and the
-prompts from scene control ("Rust. Naar WIDE bij start periode 3."). Keep it
-visible on the operator's screen; it is the only place those prompts appear.
+serial link, FOYS state, selected match, the scene OBS has on air, whether
+OBS is streaming and recording, and the prompts from scene control ("Rust.
+Naar WIDE bij start periode 3."). Keep it visible on the operator's screen;
+it is the only place those prompts appear.
+
+Stream and Opname are read from OBS every 2 s and are read-only: the server
+never starts or stops either. They read "Uit" in red once a match is
+InProgress and nothing is going out or being written, which is the case the
+rows exist for. Stream turns amber while OBS is reconnecting or skipping
+frames between two reads. Both show "—" when OBS itself is off or
+unreachable, since the Scène row already reports that.
 
 ---
 
@@ -113,6 +121,17 @@ Ultra-low cut that at the cost of stability on WiFi; Normal has been fine.
 
 Match recordings on YouTube show player names from FOYS. Clubs streaming
 youth matches should decide what they publish; the club does that per team.
+
+---
+
+## Local recording
+
+Alongside the stream, OBS records to `~/Movies` (Uitvoer > Opnemen). The
+recording uses the stream's encoder, so it costs almost no extra CPU and
+matches the stream's bitrate: about 4.5 GB per hour at 10000 Kbps. With that
+encoder OBS cannot pause a recording; stopping and starting it between
+matches is what works. The server does not control it — the dock only
+reports whether it is running.
 
 ---
 

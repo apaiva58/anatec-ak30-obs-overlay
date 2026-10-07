@@ -429,6 +429,30 @@ def system_status():
     else:
         obs = "green"
 
+    # Stream and recording. Both go "off" when OBS itself is off or
+    # unreachable: the OBS row already says so, and two more red dots for the
+    # same cause only bury it. Red here means OBS is fine and a match is
+    # running, but nothing is going out or being written.
+    live_match = (match_state.get("selected")
+                  and match_state.get("status") == "InProgress")
+
+    if obs in ("off", "red"):
+        stream = record = "off"
+    else:
+        if match_state.get("obs_stream_active"):
+            if (match_state.get("obs_stream_reconnecting")
+                    or match_state.get("obs_stream_skipped_delta")):
+                stream = "amber"
+            else:
+                stream = "green"
+        else:
+            stream = "red" if live_match else "off"
+
+        if match_state.get("obs_record_active"):
+            record = "green"
+        else:
+            record = "red" if live_match else "off"
+
     return {
         "anatec":       anatec,
         "anatec_age":   anatec_age,
@@ -443,6 +467,10 @@ def system_status():
         "obs":          obs,
         "obs_scene":    match_state.get("obs_scene"),
         "obs_missing":  match_state.get("obs_missing_scenes") or [],
+        "stream":           stream,
+        "stream_timecode":  match_state.get("obs_stream_timecode"),
+        "record":           record,
+        "record_timecode":  match_state.get("obs_record_timecode"),
         "scene_prompt": match_state.get("scene_prompt"),
     }
 

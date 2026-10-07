@@ -89,6 +89,18 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
         <span class="lbl">Scène</span>
         <span class="val" id="val-obs">—</span>
     </div>
+    <div class="status-row">
+        <span class="dot" id="dot-stream"></span>
+        <span class="lbl">Stream</span>
+        <span class="val" id="val-stream">—</span>
+        <span class="age" id="age-stream"></span>
+    </div>
+    <div class="status-row">
+        <span class="dot" id="dot-record"></span>
+        <span class="lbl">Opname</span>
+        <span class="val" id="val-record">—</span>
+        <span class="age" id="age-record"></span>
+    </div>
     <div class="status-hint" id="status-hint"></div>
 </div>
 
@@ -108,6 +120,12 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
         idle:  "Ingelogd",
         off:   "Uit"
     };
+    var OUTPUT_LABEL = {
+        green: "Actief",
+        amber: "Instabiel",
+        red:   "Uit",
+        off:   "—"
+    };
 
     function setDot(id, colour) {
         var el = document.getElementById(id);
@@ -125,6 +143,14 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
         return Math.round(seconds / 60) + "m";
     }
 
+    // OBS returns "00:12:34.567". Drop the milliseconds, and the leading
+    // hour while it is zero.
+    function timecodeText(tc) {
+        if (!tc) { return ""; }
+        var t = String(tc).split(".")[0];
+        return t.indexOf("00:") === 0 ? t.slice(3) : t;
+    }
+
     function hintFor(sys) {
         // One line, most actionable first.
         if (sys.obs === "red") {
@@ -133,8 +159,17 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
         if (sys.obs === "amber" && sys.obs_missing && sys.obs_missing.length) {
             return "Scène ontbreekt in OBS: " + sys.obs_missing.join(", ") + ".";
         }
+        if (sys.stream === "red") {
+            return "Wedstrijd loopt, maar de stream staat uit.";
+        }
+        if (sys.record === "red") {
+            return "Wedstrijd loopt, maar de opname staat uit.";
+        }
         if (sys.scene_prompt) {
             return sys.scene_prompt;
+        }
+        if (sys.stream === "amber") {
+            return "Stream instabiel: frames worden overgeslagen.";
         }
         if (sys.anatec === "red" && (sys.anatec_mode === "serial" || sys.anatec_mode === "auto")) {
             return "Anatec: geen data. Controleer de USB-kabel en of het bedieningspaneel aanstaat.";
@@ -200,11 +235,20 @@ No ES2020 syntax (no ?. or ??) — keeps this renderable in older engines.
                     setText("val-obs", sys.obs_scene || "—");
                 }
 
+                setDot("dot-stream", sys.stream || "off");
+                setText("val-stream", OUTPUT_LABEL[sys.stream] || "—");
+                setText("age-stream", timecodeText(sys.stream_timecode));
+
+                setDot("dot-record", sys.record || "off");
+                setText("val-record", OUTPUT_LABEL[sys.record] || "—");
+                setText("age-record", timecodeText(sys.record_timecode));
+
                 setText("status-hint", hintFor(sys));
             })
             .catch(function () {
                 // Server unreachable — everything unknown, say so plainly.
-                ["modus", "anatec", "foys", "match", "obs"].forEach(function (k) {
+                ["modus", "anatec", "foys", "match", "obs",
+                 "stream", "record"].forEach(function (k) {
                     setDot("dot-" + k, "red");
                     setText("val-" + k, "—");
                 });
