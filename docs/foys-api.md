@@ -296,7 +296,28 @@ under live credentials, and live ids under demo credentials.
 GET /competition/dmf-api/v1/matches
 ```
 
-Full match list re-fetched to detect status change to Final.
+Full match list re-fetched to detect status change to Final. The match
+stays in the list for the rest of the day after it is finalised (observed
+by Antonio on match days); 501153 was gone from it four days later.
+
+The server stamps `final_seen_ts` with its own clock when it first sees the
+status turn Final (`state.set_status`). That time is shown on the closing
+slate as "Afgesloten om". It is up to one status poll (~9 s) late, and it is
+not set for a match that was already Final when selected.
+
+### What FOYS knows about a finalised match (verified 7 Oct 2026, match 501153)
+
+`probes/probe_final.py`:
+
+- `/matches/{id}` has no finalisation time: only `date` (midnight UTC),
+  `startTime` and `status`. `playingTime`, `period`, `remarks` and
+  `matchDisciplinaryStatus` were null.
+- No match number besides `id`: no federation number, code or external id.
+  Whether the NBB site shows the same number is not checked.
+- `/logs` rows are goals, offenses or timeouts, told apart by which of
+  `matchGoalId`, `matchPlayerOffenseId`, `matchTimeoutId` is set. Each row
+  carries `date` (UTC wall clock, ms), `time` and `periodPosition`. The last
+  rows are the last basket of the match; there is no "match closed" row.
 
 ---
 

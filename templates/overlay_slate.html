@@ -325,6 +325,13 @@
         });
     }
 
+    // Server epoch seconds to "15:52" in this machine's local time.
+    function clockTime(ts) {
+        return new Date(ts * 1000).toLocaleTimeString("nl-NL", {
+            hour: "2-digit", minute: "2-digit"
+        });
+    }
+
     function seasonYear(iso) {
         return (iso && iso.length >= 4) ? iso.slice(0, 4) : new Date().getFullYear();
     }
@@ -422,9 +429,16 @@
             document.getElementById("meta-line").textContent =
                 [when, where].filter(Boolean).join(" · ") || "—";
 
+            // Match id is the FOYS id, the only match number FOYS carries.
+            // "Afgesloten om" is the server's clock when it first saw Final,
+            // up to ~9 s after the desk closed the match; FOYS has no
+            // finalisation time of its own. Each part only when known.
             const club = s.home_club || "";
-            document.getElementById("meta-sub").textContent =
-                club ? `Live uitgezonden door ${club}` : "";
+            const sub = [];
+            if (s.match_id) sub.push(`Wedstrijd ${s.match_id}`);
+            if (s.final_seen_ts) sub.push(`Afgesloten om ${clockTime(s.final_seen_ts)}`);
+            if (club) sub.push(`Live uitgezonden door ${club}`);
+            document.getElementById("meta-sub").textContent = sub.join(" · ");
             document.getElementById("credit-club").textContent = club;
             document.getElementById("credit-copy").textContent =
                 club ? `© ${seasonYear(s.match_date)} ${club}` : "";

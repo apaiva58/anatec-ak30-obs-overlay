@@ -88,7 +88,7 @@ import threading
 import time
 from flask import Flask, jsonify, render_template, make_response
 from foys import FoysClient
-from state import match_state
+from state import match_state, set_status
 from scene_control import ObsClient, DryObs, SceneController
 from scene_logic import SceneDirector, parse_periods, parse_seconds
 
@@ -286,7 +286,7 @@ def poll():
                         matches = client.get_matches()
                         current = next((m for m in matches if m["id"] == match_id), None)
                         if current:
-                            match_state["status"] = current["status"]
+                            set_status(current["status"])
                         match_state["foys_last_ok_ts"]  = time.time()
                         match_state["foys_error_count"] = 0
                     except Exception:
@@ -353,6 +353,7 @@ def select_match(match_id):
         "home_score": match["homeScore"],
         "away_score": match["awayScore"],
         "status":     match["status"],
+        "final_seen_ts": None,
         "home_club":  match["homeTeamOrganisationName"],
         "away_club":  match["awayTeamOrganisationName"],
         "last_foul":  None,

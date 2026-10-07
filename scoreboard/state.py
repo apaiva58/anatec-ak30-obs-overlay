@@ -5,6 +5,8 @@ Shared in-memory match state.
 Updated by the background poller, read by Flask routes.
 """
 
+import time
+
 match_state = {
      # FOYS api data
     "selected":       False,
@@ -20,6 +22,7 @@ match_state = {
     "away_bonus":     False,
     "last_foul":      None,   # for popup: {player, jersey, code, team}
     "status":         "Planned",
+    "final_seen_ts":  None,   # server clock when status was first seen turning Final
     "period_name":   "—",
     "periods":       [],   # [{"period": 14, "name": "Q1", "home": 20, "away": 18}, ...]
     "home_timeouts": 0,
@@ -65,3 +68,22 @@ match_state = {
     "obs_missing_scenes":  [],      # configured scenes that do not exist in OBS
     "scene_prompt":        None,    # one line for the operator
 }
+
+
+def set_status(status):
+    """Write the FOYS match status.
+
+    On a transition from a known, non-Final status to Final, stamp
+    final_seen_ts with this machine's clock: the moment the server first saw
+    the match closed, up to one status poll (about 9 s) after the desk closed
+    it in DWF. FOYS itself carries no finalisation time (probes/probe_final.py,
+    7 Oct 2026). A match that is already Final when selected is written
+    directly by select_match and gets no stamp, rather than a wrong one.
+    """
+    prev = match_state.get("status")
+    match_state["status"] = status
+    if status == "Final":
+        if prev not in (None, "Final"):
+            match_state["final_seen_ts"] = time.time()
+    else:
+        match_state["final_seen_ts"] = None

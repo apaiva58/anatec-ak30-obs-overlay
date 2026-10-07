@@ -643,6 +643,30 @@ def test_simulator_quarters_match_the_mock_match():
     assert (last["home_score"], last["guest_score"]) == (mock["home_score"], mock["away_score"])
 
 
+def test_set_status_stamps_only_a_seen_transition_to_final():
+    import state
+    saved = dict(state.match_state)
+    try:
+        st = state.match_state
+        st.update(status="InProgress", final_seen_ts=None)
+        state.set_status("InProgress")
+        assert st["final_seen_ts"] is None
+        state.set_status("Final")
+        first = st["final_seen_ts"]
+        assert first is not None
+        state.set_status("Final")                       # next poll: unchanged
+        assert st["final_seen_ts"] == first
+        state.set_status("InProgress")                  # mock: next pass
+        assert st["final_seen_ts"] is None
+
+        st.update(status="Final", final_seen_ts=None)   # selected already Final
+        state.set_status("Final")
+        assert st["final_seen_ts"] is None
+    finally:
+        state.match_state.clear()
+        state.match_state.update(saved)
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

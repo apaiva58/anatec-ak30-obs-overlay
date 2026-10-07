@@ -26,7 +26,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(__file__))
 from parser import parse, format_clock
-from state import match_state
+from state import match_state, set_status
 
 try:
     import serial
@@ -299,10 +299,10 @@ def _read_simulate():
         for frame, label, pause in game_sequence():
             if match_state.get("foys_mode") == "mock":
                 if first and finalised_by_sim:
-                    match_state["status"] = "InProgress"
+                    set_status("InProgress")
                     finalised_by_sim = False
                 elif label == FINAL_LABEL and not finalised_by_sim:
-                    match_state["status"] = "Final"
+                    set_status("Final")
                     finalised_by_sim = True
             first = False
             parsed = parse(frame)

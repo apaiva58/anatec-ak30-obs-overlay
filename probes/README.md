@@ -13,6 +13,7 @@ Run from the repo root, e.g. `python3 probes/probe_all.py 501153`.
 | `probe_filter.py` | Which filters are honoured? (`teamId` yes; period, player, type no) |
 | `probe_detail.py` | Does `/matches/{id}` carry per-player fouls? (no, only `totalPoints`) |
 | `probe_all.py` | Compare `/offenses` vs `/offenses/all`, plus `/timeouts`, `/logs`, `/goals` |
+| `probe_final.py` | What does FOYS hold for a finalised match: a match number, a close time? (neither; see `docs/foys-api.md`) |
 
 Written 4 Oct 2026 while tracing why foul popups stopped after the tenth
 foul of the 3 Oct match. Findings are recorded in `docs/foys-api.md`.
