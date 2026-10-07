@@ -8,9 +8,14 @@
 
         /* Full-frame closing slate: this page replaces the camera, so the
            background is opaque. The other overlays sit over the court and
-           are transparent. */
+           are transparent.
+
+           The background sits on #slate, not on body: an OBS Browser Source
+           injects its Custom CSS after the page, and the default line sets
+           body { background-color: rgba(0, 0, 0, 0) }, which made the slate
+           see-through in OBS while it looked solid in a browser. */
         body {
-            background: #080c1c;
+            background: transparent;
             font-family: 'Barlow', sans-serif;
             width: 1920px;
             height: 1080px;
@@ -20,6 +25,7 @@
         #slate {
             position: absolute;
             top: 0; bottom: 0; left: 0; right: 0;
+            background: #080c1c;
             padding: 48px 80px 40px;
             display: flex;
             flex-direction: column;
