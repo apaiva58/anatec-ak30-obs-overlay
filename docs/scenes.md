@@ -4,6 +4,22 @@ How OBS changes scene during a match. Decisions: `scoreboard/scene_logic.py`
 (pure logic, tested). OBS side: `scoreboard/scene_control.py`. Settings: `.env`
 (see `.env.example`). Tests: `python3 tests/test_scene_logic.py`.
 
+## Roles
+
+The server knows three roles, not scenes. Each is mapped to a scene name in
+`.env`; the name must match OBS exactly, accents included.
+
+| Role | Setting | Default if unset | Overlay the scene should hold |
+|---|---|---|---|
+| court | `OBS_SCENE_COURT` | `Scène 2: WIDE Overlay` | `/overlay/wide` or `/overlay/box` |
+| halftime | `OBS_SCENE_HALFTIME` | `Scène 4: STATS` | `/overlay/stats` |
+| final | `OBS_SCENE_FINAL` | the halftime scene | `/overlay/slate`, `/overlay/stats` or `/overlay/final` |
+
+The defaults are Almere Pioneers' scene names; another club sets its own. The
+server never looks inside a scene: cameras, logos and other sources are the
+club's choice. A scene not mapped to a role belongs to the operator and is
+never switched to.
+
 ## What happens
 
 | trigger | action | status dock says |
@@ -41,8 +57,9 @@ embedded real frames in `tests/test_scene_logic.py`.
 
 Edit `.env`, restart the server. No code change.
 
-- A "Final Stats" scene: create it in OBS (date, producers, copyright,
-  disclaimer, whatever you place), then `OBS_SCENE_FINAL="Final Stats"`.
+- A dedicated final scene: create it in OBS with a Browser Source on
+  `/overlay/slate`, then set `OBS_SCENE_FINAL` to its name (Almere Pioneers:
+  `Scène 6: Final Slate`).
 - Stats at every break: `OBS_STATS_AFTER_PERIODS=1,2,3`.
 - More or less time on court after the buzzer: `OBS_STATS_DELAY=3`.
 

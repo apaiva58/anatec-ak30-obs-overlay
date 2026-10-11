@@ -43,7 +43,7 @@ Environment (.env)
     OBS_SCENE_HALFTIME          scene for the halftime break (default:
                                 Scène 4: STATS)
     OBS_SCENE_FINAL             scene for a finalised match (default: the
-                                halftime scene; later e.g. Final Stats)
+                                halftime scene; e.g. one holding /overlay/slate)
     OBS_STATS_AFTER_PERIODS     period ends that get the halftime scene
                                 (default 2; 1,2,3 for every break)
     OBS_STATS_DELAY             seconds between the buzzer and that scene
@@ -105,9 +105,9 @@ SCENES = {
     "court":    os.getenv("OBS_SCENE_COURT",    "Scène 2: WIDE Overlay"),
     "halftime": os.getenv("OBS_SCENE_HALFTIME", "Scène 4: STATS"),
 }
-# The scene for a finalised match. Until a dedicated scene exists it is the
-# halftime scene; create "Final Stats" in OBS, set OBS_SCENE_FINAL=Final Stats
-# and restart. No code change needed.
+# The scene for a finalised match. Unset, it is the halftime scene; a dedicated
+# one (e.g. holding /overlay/slate) is set with OBS_SCENE_FINAL in .env and a
+# restart. No code change needed.
 SCENES["final"] = os.getenv("OBS_SCENE_FINAL", SCENES["halftime"])
 
 # Which period ends put the halftime scene on air: "2", or "1,2,3" for every break.

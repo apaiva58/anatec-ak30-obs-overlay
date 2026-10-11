@@ -39,7 +39,7 @@ flowchart LR
     DWF[DWF tablet] --> FOYS[api.foys.io]
     FOYS -- "poll every 3 s" --> S
     S["scoreboard/server.py<br/>Flask, port 5001"]
-    S -- "Browser Sources<br/>/overlay/wide, /box, /stats, /final" --> OBS[OBS Studio]
+    S -- "Browser Sources<br/>/overlay/wide, /box, /stats, /final, /slate" --> OBS[OBS Studio]
     S -- "Custom Browser Dock<br/>/status" --> OBS
     S -. "WebSocket 4455<br/>scene switching" .-> OBS
     PH[iPhone camera] -- "LensLink over WiFi" --> OBS
@@ -49,6 +49,25 @@ flowchart LR
 The Anatec feed is leading for score, clock, period and timeouts (it is what the
 hall sees). FOYS is leading for fouls, names, logos and player stats. Either
 source alone also works. `docs/foys-api.md` has the priority rules.
+
+---
+
+## Scene switching: roles, not names
+
+The server switches OBS between three roles, and nothing else:
+
+| Role | `.env` setting | On air when |
+|---|---|---|
+| court | `OBS_SCENE_COURT` | the first play after the halftime break, if the halftime scene is still on air |
+| halftime | `OBS_SCENE_HALFTIME` | the buzzer ends a period listed in `OBS_STATS_AFTER_PERIODS` (default: the half) |
+| final | `OBS_SCENE_FINAL` | FOYS reports the match as Final |
+
+Each role is mapped to a scene name in your own OBS. What is in that scene
+(cameras, logos, sponsor images) is up to you: the server only needs the scene
+to exist and to hold the right overlay page. Scenes you do not map are never
+switched to, and a scene the operator picks by hand is left alone. The minimal
+setup and one club's full setup are in `docs/obs-and-camera.md`, the switching
+rules in `docs/scenes.md`.
 
 ---
 
@@ -85,8 +104,9 @@ a `urllib3`/LibreSSL warning at start, which is harmless.
    `--anatec serial --port /dev/tty.usbserial-XXXX`.
 3. Open http://localhost:5001 and pick the match.
 4. OBS: Browser Sources on `http://localhost:5001/overlay/wide` (or `/box`,
-   `/stats`, `/final`) at the canvas size, and `http://localhost:5001/status`
-   as a Custom Browser Dock. Scene names go in `.env`.
+   `/stats`, `/final`, `/slate`) at the canvas size, and
+   `http://localhost:5001/status` as a Custom Browser Dock. Map your scenes to
+   the three roles in `.env` (see Scene switching above).
 
 Step by step, in Dutch, for the volunteer at the table: `docs/match-day.md`.
 OBS, camera and streaming settings: `docs/obs-and-camera.md`.
@@ -104,8 +124,8 @@ Other modes: `--anatec off` (FOYS only), `--demo` (FOYS demo organisation),
 | `docs/protocol.md` | Anatec AK30 serial frame: byte map, timing, open questions |
 | `docs/hardware.md` | Cables, the DIN 5-pin tap, tested configuration |
 | `docs/foys-api.md` | FOYS DWF API as actually observed: endpoints, the `/offenses` cap, offense codes under FIBA Rules 2026, data priority between the two feeds |
-| `docs/scenes.md` | Scene switching rules, the buzzer detector, what to change in `.env` |
-| `docs/obs-and-camera.md` | OBS scenes and sources, WebSocket, docks, LensLink second camera, YouTube settings |
+| `docs/scenes.md` | Scene roles, switching rules, the buzzer detector, what to change in `.env` |
+| `docs/obs-and-camera.md` | Minimal OBS setup, an example club setup, overlay routes, WebSocket, docks, LensLink second camera, YouTube settings |
 | `docs/match-day.md` | Checklist for the volunteer at the table (Dutch) |
 | `probes/README.md` | Read-only FOYS probes and what each one established |
 
@@ -137,6 +157,7 @@ Other modes: `--anatec off` (FOYS only), `--demo` (FOYS demo organisation),
     │   ├── overlay_box.html        corner box
     │   ├── overlay_stats.html      player stats at the break
     │   ├── overlay_final.html      final score
+    │   ├── overlay_slate.html      closing slate
     │   ├── overlay.html            combined live + final
     │   ├── overlay_anatec.html     Anatec only
     │   └── overlay_foys.html       FOYS only

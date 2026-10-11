@@ -12,19 +12,37 @@ running the last iOS it supports.
 
 ## Scenes and sources
 
-The scene collection has four scenes. Names must match `.env` exactly,
-accents included; the status dock lists any configured scene OBS does not
-have.
+### Minimal setup
 
-| Scene | Holds | Switched by the server? |
+The server needs three scenes, one per role (`scenes.md`). The names are
+yours; put them in `.env`.
+
+| Role | `.env` | Scene contents |
 |---|---|---|
-| `Scène 1: BOX overlay` | camera + Browser Source `/overlay/box` | no, operator only |
-| `Scène 2: WIDE Overlay` | camera + Browser Source `/overlay/wide` | yes: `OBS_SCENE_COURT` (play) |
-| `Scène 3 Macbook Camera` | the MacBook's own camera, no overlay | no, operator only |
-| `Scène 4: STATS` | camera + Browser Source `/overlay/stats` | yes: `OBS_SCENE_HALFTIME` and, until a `Final Stats` scene exists, `OBS_SCENE_FINAL` |
+| court | `OBS_SCENE_COURT` | camera + Browser Source `/overlay/wide` |
+| halftime | `OBS_SCENE_HALFTIME` | camera + Browser Source `/overlay/stats` |
+| final | `OBS_SCENE_FINAL` | Browser Source `/overlay/slate` |
 
-The server only ever switches to the court, halftime and final scenes from
-`.env`. A scene the operator picks by hand is left alone (`scenes.md`).
+That is enough for a stream with automatic switching. Anything else in these
+scenes, and any other scene, is yours: the server only ever switches to the
+three mapped scenes, and a scene the operator picks by hand is left alone.
+The status dock lists any mapped scene that OBS does not have.
+
+### Example: Almere Pioneers
+
+One club's collection, for reference, not a requirement. Six scenes, three of
+them mapped:
+
+| Scene | Holds | Role |
+|---|---|---|
+| `Scène 1: BOX overlay` | iPhone camera (LensLink) + club logo + `/overlay/box` | none, operator only |
+| `Scène 2: WIDE Overlay` | iPhone camera + `/overlay/wide` | court |
+| `Scène 3 Macbook Camera` | the MacBook's own camera + `/overlay/wide` | none, operator only |
+| `Scène 4: STATS` | iPhone camera + club logo + `/overlay/stats` | halftime |
+| `Scène 5: STATS + LOGO` | club logo + `/overlay/stats` | none, operator only |
+| `Scène 6: Final Slate` | club logo + `/overlay/slate` | final |
+
+### Overlay pages
 
 Each Browser Source: URL `http://localhost:5001/overlay/<route>`, width and
 height equal to the canvas (1920 x 1080), nothing else to set. The pages are
@@ -36,6 +54,7 @@ transparent outside their own elements. Routes:
 | `/overlay/box` | compact corner box |
 | `/overlay/stats` | per-player points, threes, fouls (break and final) |
 | `/overlay/final` | final score |
+| `/overlay/slate` | closing slate: final score, score per quarter, player tables, match details; covers the whole frame |
 | `/overlay` | the older combined page: live bar that fades to the final table |
 | `/overlay/anatec`, `/overlay/foys` | one source only, for diagnosis |
 

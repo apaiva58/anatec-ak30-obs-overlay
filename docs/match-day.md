@@ -28,9 +28,19 @@ nooit in een appje).
    - FOYS: groen na het kiezen van de wedstrijd
    - OBS: groen; staat er een scène als "ontbreekt", dan klopt de naam in
      OBS niet met `.env`
-7. iPhone: LensLink starten, adres invullen in OBS, beeld controleren.
-8. Scène "Scène 2: WIDE Overlay" kiezen. Druk op een knop van de AK30 en
-   kijk of de balk meebeweegt.
+7. iPhone 7 (de camera): start LensLink en laat de app open staan.
+
+   Dubbelklik in OBS, in het vak "Bronnen", op **LensLink Camera**. Het
+   venster "Eigenschappen" opent. Klik bij "Phone" op het pijltje en kies
+   de iPhone 7 uit de lijst. Het beeld van de camera verschijnt bovenin
+   het venster. Klik op OK.
+
+   ![Eigenschappen van LensLink Camera in OBS](img/lenslink-obs.png)
+
+   Controleer of het beeld scherp en goed belicht is. Blijft het beeld
+   zwart, kijk dan onderaan bij "Als het misgaat".
+8. Klik in OBS, in het vak "Scènes", op **Scène 2: WIDE Overlay**. Druk op
+   een knop van de AK30 en kijk of de balk in het beeld meebeweegt.
 9. Stream starten in OBS. Controleer op een telefoon of het beeld op
    YouTube aankomt (reken op zo'n 20 seconden vertraging).
 
@@ -55,13 +65,15 @@ nooit in een appje).
 Volgt er nog een wedstrijd, dan blijven server, OBS en iPhone gewoon
 aan:
 
-1. Wachten tot de eindstand in beeld staat (of zelf de eindscène kiezen).
+1. Wachten tot de eindstand in beeld staat. Dat gaat vanzelf. Wil je niet
+   wachten, klik dan in OBS, in het vak "Scènes", op **Scène 6: Final Slate**.
 2. Stream stoppen in OBS.
 3. In de browser op http://localhost:5001 de volgende wedstrijd kiezen.
    Het dock springt terug naar de beginstand; de AK30 wordt door de tafel
    zelf op nul gezet.
-4. Scène "Scène 2: WIDE Overlay" kiezen en een nieuwe stream starten in
-   OBS. Even op een telefoon controleren of de nieuwe uitzending loopt.
+4. Klik in OBS, in het vak "Scènes", op **Scène 2: WIDE Overlay** en start
+   een nieuwe stream in OBS. Even op een telefoon controleren of de nieuwe
+   uitzending loopt.
 
 Na de laatste wedstrijd:
 
