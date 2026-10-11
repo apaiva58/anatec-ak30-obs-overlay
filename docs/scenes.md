@@ -99,8 +99,11 @@ the decisions.
   The `[Scenes] play resumed (...)` log line names the evidence used.
 - A quarter without a single goal, foul or timeout is not treated as played,
   so its end does not switch.
-- How long the desk takes to finalise after the last buzzer has not been
-  measured. The final scene appears when FOYS says Final, whenever that is.
+- How long the desk takes to finalise after the last buzzer depends on the
+  desk. Measured once (10 Oct 2026): the final scene came 1 min 25 s after
+  the last buzzer. It appears when FOYS says Final, whenever that is.
+- Live so far: two regular four-quarter matches (10 Oct 2026), halftime scene
+  and the return to court worked as intended. Overtime has not been seen live.
 - If OBS runs on another machine and is unreachable, each reconnect attempt
   can block the controller for up to 3 s. With OBS on the same Mac it fails
   at once.

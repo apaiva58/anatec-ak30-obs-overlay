@@ -25,7 +25,7 @@ What has actually run, and what has not.
 | FOYS polling: score, period, team and player fouls, timeouts, rosters, final stats; fetching every foul via `/offenses/all` | Same two matches. The `/offenses/all` fix came after the first match stopped showing foul popups at the tenth foul (see `docs/foys-api.md`) |
 | Overlay pages as OBS Browser Sources, status dock | Same two matches |
 | Second camera: iPhone 7 over WiFi through LensLink, started from the OBS dock | Same two matches |
-| Automatic scene switching (halftime, back to court on play, final) | Built after those matches. 27 unit tests replaying real captured frames, plus dry runs at the desk. **Not yet run on a real match or against a real OBS.** |
+| Automatic scene switching (halftime, back to court on play, final) | 29 unit tests replaying real captured frames, plus dry runs at the desk. Ran against a real OBS in two live matches on 10 Oct 2026 (Almere Pioneers MSE-4 and X14-4), streamed and recorded: switching went as intended, back to court on the first play after the break at the right moment, final scene about 1 min 25 s after the last buzzer (one measurement). Overtime not yet seen live. |
 | Scores above 99 on the Anatec frame | Not captured yet (`docs/protocol.md`) |
 | Raspberry Pi at the officials' table relaying the serial feed | Idea only, nothing built |
 
@@ -162,7 +162,7 @@ Other modes: `--anatec off` (FOYS only), `--demo` (FOYS demo organisation),
     │   ├── overlay_anatec.html     Anatec only
     │   └── overlay_foys.html       FOYS only
     ├── tests/
-    │   └── test_scene_logic.py     27 tests; no pytest needed
+    │   └── test_scene_logic.py     29 tests; no pytest needed
     ├── probes/                     read-only FOYS API diagnostics
     └── docs/                       see above
 

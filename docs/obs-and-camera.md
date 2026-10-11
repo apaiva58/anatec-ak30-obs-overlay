@@ -92,10 +92,10 @@ that is unreachable costs up to 3 s per retry (`scenes.md`, Known limits).
 `--no-obs` is a dry run: decisions are logged and shown on the dock, nothing
 is sent. Use it at the desk and for a first test at the hall.
 
-Not yet done: a full match with the server switching a real OBS. The two
-matches streamed so far ran before scene control was rebuilt. First real
-test: run with `--anatec auto` and without `--no-obs`, watch the dock, and
-be ready to switch by hand.
+Scene switching has run against a real OBS in two full matches (10 Oct
+2026), with `--anatec auto` and without `--no-obs`, streamed and recorded.
+The two matches streamed on 3 Oct ran before scene control was rebuilt. For a
+first run at a new venue, watch the dock and be ready to switch by hand.
 
 ---
 
